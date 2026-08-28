@@ -18,9 +18,11 @@ export async function loadStockData(ticker) {
     console.warn(`Local JSON not found for ${ticker}, attempting live fetch...`);
   }
 
-  // 2. Fallback to Yahoo Finance API directly in browser
+  // 2. Fallback to Yahoo Finance API directly in browser (from 2020 to present)
   const yahooSymbol = ticker.endsWith('.JK') ? ticker : `${ticker}.JK`;
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=2y`;
+  const startTimestamp = Math.floor(new Date('2020-01-01T00:00:00Z').getTime() / 1000);
+  const endTimestamp = Math.floor(Date.now() / 1000);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`;
 
   const response = await fetch(url);
   if (!response.ok) {

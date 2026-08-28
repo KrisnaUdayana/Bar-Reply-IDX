@@ -11,9 +11,28 @@ const JSON_DIR = join(__dirname, '..', 'public', 'data');
 // Default Indonesian stock tickers to fetch if none provided
 const DEFAULT_TICKERS = ['BBCA', 'BBRI', 'BMRI', 'TLKM', 'ASII'];
 
-// Custom tickers passed via command line args (e.g. node scripts/fetch-data.js GOTO UNVR)
+// Parse arguments
 const args = process.argv.slice(2);
-const tickersToFetch = args.length > 0 ? args.map(t => t.toUpperCase()) : DEFAULT_TICKERS;
+
+// Check if a start year is provided (e.g. --year=2020 or 2020)
+let startYear = 2020; // Default: start from 2020
+const customTickers = [];
+
+for (const arg of args) {
+  if (arg.startsWith('--year=')) {
+    startYear = parseInt(arg.split('=')[1], 10);
+  } else if (!isNaN(parseInt(arg, 10)) && arg.length === 4) {
+    startYear = parseInt(arg, 10);
+  } else {
+    customTickers.push(arg.toUpperCase());
+  }
+}
+
+const tickersToFetch = customTickers.length > 0 ? customTickers : DEFAULT_TICKERS;
+
+// Period 1: Jan 1st of startYear in Unix timestamp (seconds)
+const startTimestamp = Math.floor(new Date(`${startYear}-01-01T00:00:00Z`).getTime() / 1000);
+const endTimestamp = Math.floor(Date.now() / 1000);
 
 // Ensure output directories exist
 mkdirSync(CSV_DIR, { recursive: true });
@@ -27,10 +46,10 @@ async function fetchStockData(ticker) {
   const yahooSymbol = ticker.endsWith('.JK') ? ticker : `${ticker}.JK`;
   const cleanTicker = ticker.replace('.JK', '');
 
-  // 2 years of daily data
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=2y`;
+  // Query by period1 (start date) and period2 (current date)
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`;
 
-  console.log(`📡 Fetching ${cleanTicker} (${yahooSymbol}) from Yahoo Finance...`);
+  console.log(`📡 Fetching ${cleanTicker} (${yahooSymbol}) from ${startYear} to present...`);
 
   try {
     const res = await fetch(url, {
@@ -100,7 +119,7 @@ async function fetchStockData(ticker) {
 
 async function main() {
   console.log(`====================================================`);
-  console.log(`🚀 IDX Bar Replay — Auto Fetch Stock Data`);
+  console.log(`🚀 IDX Bar Replay — Auto Fetch Stock Data (From ${startYear})`);
   console.log(`====================================================\n`);
 
   let successCount = 0;
@@ -110,7 +129,7 @@ async function main() {
   }
 
   console.log(`\n====================================================`);
-  console.log(`✨ Completed! Downloaded ${successCount}/${tickersToFetch.length} stocks.`);
+  console.log(`✨ Completed! Downloaded ${successCount}/${tickersToFetch.length} stocks from year ${startYear}.`);
   console.log(`====================================================\n`);
 }
 
