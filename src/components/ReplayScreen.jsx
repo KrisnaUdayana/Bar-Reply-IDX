@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { STOCKS } from '../config/stocks';
 import { loadStockData } from '../utils/dataLoader';
-import { aggregateToWeekly, aggregateToMonthly } from '../utils/timeframeUtils';
+import { aggregateToWeekly, aggregateToMonthly, aggregateToNHours } from '../utils/timeframeUtils';
 import { useReplayEngine } from '../hooks/useReplayEngine';
 import CandlestickChart from './CandlestickChart';
 import ReplayControls from './ReplayControls';
@@ -18,19 +18,22 @@ export default function ReplayScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Transform data based on active timeframe (1D, 1W, 1M)
+  const isHourlyTimeframe = ['1H', '2H', '3H', '4H'].includes(timeframe);
+  const dataInterval = isHourlyTimeframe ? '1h' : '1d';
+
+  // Transform data based on active timeframe (1H, 2H, 3H, 4H, 1D, 1W, 1M)
   const activeData = useMemo(() => {
     if (!stockData) return null;
-    if (timeframe === '1W') {
-      return aggregateToWeekly(stockData);
-    }
-    if (timeframe === '1M') {
-      return aggregateToMonthly(stockData);
-    }
+    if (timeframe === '1H') return stockData;
+    if (timeframe === '2H') return aggregateToNHours(stockData, 2);
+    if (timeframe === '3H') return aggregateToNHours(stockData, 3);
+    if (timeframe === '4H') return aggregateToNHours(stockData, 4);
+    if (timeframe === '1W') return aggregateToWeekly(stockData);
+    if (timeframe === '1M') return aggregateToMonthly(stockData);
     return stockData;
   }, [stockData, timeframe]);
 
-  // Fetch full stock data when ticker changes
+  // Fetch full stock data when ticker or interval changes
   useEffect(() => {
     let cancelled = false;
 
@@ -38,7 +41,7 @@ export default function ReplayScreen() {
       setLoading(true);
       setError('');
       try {
-        const data = await loadStockData(selectedTicker);
+        const data = await loadStockData(selectedTicker, dataInterval);
         if (!cancelled) {
           setStockData(data);
         }
@@ -55,7 +58,7 @@ export default function ReplayScreen() {
 
     fetchData();
     return () => { cancelled = true; };
-  }, [selectedTicker]);
+  }, [selectedTicker, dataInterval]);
 
   const {
     mode,
@@ -108,6 +111,35 @@ export default function ReplayScreen() {
           </div>
 
           <div className="timeframe-selector">
+            <button
+              className={`timeframe-btn ${timeframe === '1H' ? 'active' : ''}`}
+              onClick={() => setTimeframe('1H')}
+              title="Timeframe 1 Jam"
+            >
+              1H
+            </button>
+            <button
+              className={`timeframe-btn ${timeframe === '2H' ? 'active' : ''}`}
+              onClick={() => setTimeframe('2H')}
+              title="Timeframe 2 Jam"
+            >
+              2H
+            </button>
+            <button
+              className={`timeframe-btn ${timeframe === '3H' ? 'active' : ''}`}
+              onClick={() => setTimeframe('3H')}
+              title="Timeframe 3 Jam"
+            >
+              3H
+            </button>
+            <button
+              className={`timeframe-btn ${timeframe === '4H' ? 'active' : ''}`}
+              onClick={() => setTimeframe('4H')}
+              title="Timeframe 4 Jam"
+            >
+              4H
+            </button>
+            <div className="timeframe-divider" />
             <button
               className={`timeframe-btn ${timeframe === '1D' ? 'active' : ''}`}
               onClick={() => setTimeframe('1D')}

@@ -504,6 +504,13 @@ body::before {
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
+.timeframe-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-color);
+  margin: 0 2px;
+}
+
 .header-right {
   display: flex;
   align-items: center;

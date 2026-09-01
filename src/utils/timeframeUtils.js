@@ -98,3 +98,68 @@ export function aggregateToMonthly(dailyCandles) {
 
   return Array.from(monthlyMap.values());
 }
+
+/**
+ * Helper to get date string YYYY-MM-DD from candle time (number or string).
+ */
+function getDateString(time) {
+  if (typeof time === 'number') {
+    return new Date(time * 1000).toISOString().split('T')[0];
+  }
+  if (typeof time === 'string') {
+    return time.split('T')[0].split(' ')[0];
+  }
+  return '';
+}
+
+/**
+ * Aggregate 1-hour candles array into N-hour OHLC candles (e.g. 2H, 3H, 4H).
+ * Groups candles by trading day and steps every N candles.
+ *
+ * @param {Array<{time: number|string, open: number, high: number, low: number, close: number}>} hourlyCandles
+ * @param {number} stepHours - 2, 3, or 4
+ * @returns {Array<{time: number|string, open: number, high: number, low: number, close: number}>}
+ */
+export function aggregateToNHours(hourlyCandles, stepHours = 1) {
+  if (!Array.isArray(hourlyCandles) || hourlyCandles.length === 0 || stepHours <= 1) {
+    return hourlyCandles || [];
+  }
+
+  // 1. Group 1h candles by date string
+  const daysMap = new Map();
+  for (const candle of hourlyCandles) {
+    if (!candle || candle.time == null) continue;
+    const dateKey = getDateString(candle.time);
+    if (!daysMap.has(dateKey)) {
+      daysMap.set(dateKey, []);
+    }
+    daysMap.get(dateKey).push(candle);
+  }
+
+  const result = [];
+
+  // 2. For each day, group every N candles
+  for (const [, dayCandles] of daysMap) {
+    for (let i = 0; i < dayCandles.length; i += stepHours) {
+      const chunk = dayCandles.slice(i, i + stepHours);
+      if (chunk.length === 0) continue;
+
+      let high = chunk[0].high;
+      let low = chunk[0].low;
+      for (let j = 1; j < chunk.length; j++) {
+        high = Math.max(high, chunk[j].high);
+        low = Math.min(low, chunk[j].low);
+      }
+
+      result.push({
+        time: chunk[0].time,
+        open: chunk[0].open,
+        high,
+        low,
+        close: chunk[chunk.length - 1].close,
+      });
+    }
+  }
+
+  return result;
+}
