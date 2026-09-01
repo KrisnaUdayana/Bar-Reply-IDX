@@ -2,9 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import FibSettingsModal, { DEFAULT_FIB_LEVELS } from './FibSettingsModal';
 
 /**
- * 1:1 TradingView Position, Lines, & Fibonacci Overlay Component.
- * Supports: Long/Short position, Ruler, Trendline, Ray, Horizontal Line, Vertical Line, Horizontal Ray, Crossline, Fib Retracement, & Fib Settings Modal.
- * Supports dragging entire Fibonacci drawings & individual handles.
+ * 1:1 TradingView Position, Lines, Fibonacci, Brushes, Arrows, & Shapes Overlay Component.
+ * Supports: Long/Short position, Ruler, Trendline, Ray, Horizontal Line, Vertical Line, Horizontal Ray, Crossline, Fib Retracement, Fib Settings Modal, Brush, Highlighter, Rectangle, Arrow, Arrow Mark Up/Down.
  *
  * @param {{
  *   chartRef: React.RefObject,
@@ -32,6 +31,9 @@ export default function DrawingOverlay({
   const [rulerDraft, setRulerDraft] = useState(null);
   const [lineDraft, setLineDraft] = useState(null);
   const [editingFibDrawing, setEditingFibDrawing] = useState(null);
+
+  // Freehand stroke state (for Brush & Highlighter)
+  const [activeFreehandStroke, setActiveFreehandStroke] = useState(null);
 
   // 60 FPS animation loop to keep SVG overlay perfectly synced during pan, scroll, zoom, and price scale drags
   useEffect(() => {
@@ -88,9 +90,81 @@ export default function DrawingOverlay({
     }
   }, [chartRef]);
 
-  // Handle overlay click to add new drawing
-  const handleContainerClick = (e) => {
+  // Handle overlay mousedown (for freehand Brush/Highlighter & click tools)
+  const handleMouseDown = (e) => {
     if (activeTool === 'cursor') return;
+
+    // Freehand Brush & Highlighter
+    if (activeTool === 'brush' || activeTool === 'highlighter') {
+      const rect = containerRef.current.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      const price = yToPrice(clickY);
+      const logical = xToLogical(clickX);
+
+      if (price != null && logical != null) {
+        setActiveFreehandStroke({
+          type: activeTool,
+          points: [{ logical, price }],
+        });
+      }
+    }
+  };
+
+  // Mouse move handler for live freehand drawing & line draft
+  const handleMouseMove = (e) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    // Freehand Brush / Highlighter tracking
+    if (activeFreehandStroke) {
+      const price = yToPrice(clickY);
+      const logical = xToLogical(clickX);
+      if (price != null && logical != null) {
+        setActiveFreehandStroke(prev => ({
+          ...prev,
+          points: [...prev.points, { logical, price }],
+        }));
+      }
+      return;
+    }
+
+    // Line Draft tracking
+    if (lineDraft) {
+      const currentPrice = yToPrice(clickY);
+      const currentLogical = xToLogical(clickX);
+
+      if (currentPrice != null && currentLogical != null) {
+        setLineDraft(prev => ({
+          ...prev,
+          price2: currentPrice,
+          endLogical: currentLogical,
+        }));
+      }
+    }
+  };
+
+  // Mouse up handler to finish freehand Brush / Highlighter drawing
+  const handleMouseUp = () => {
+    if (activeFreehandStroke) {
+      if (activeFreehandStroke.points.length > 1) {
+        onAddDrawing({
+          id: Date.now().toString(),
+          type: activeFreehandStroke.type,
+          points: activeFreehandStroke.points,
+        });
+        if (onToolUsed) onToolUsed();
+      }
+      setActiveFreehandStroke(null);
+    }
+  };
+
+  // Handle overlay click to add new 1-click & 2-click drawings
+  const handleContainerClick = (e) => {
+    if (activeTool === 'cursor' || activeTool === 'brush' || activeTool === 'highlighter') return;
 
     const rect = containerRef.current.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
@@ -101,6 +175,29 @@ export default function DrawingOverlay({
 
     const clickedLogical = xToLogical(clickX) ?? 0;
     const defaultBarsCount = 15;
+
+    // ─── 1-CLICK STAMP TOOLS ───
+    if (activeTool === 'arrowmarkup') {
+      onAddDrawing({
+        id: Date.now().toString(),
+        type: 'arrowmarkup',
+        price1: clickedPrice,
+        startLogical: clickedLogical,
+      });
+      if (onToolUsed) onToolUsed();
+      return;
+    }
+
+    if (activeTool === 'arrowmarkdown') {
+      onAddDrawing({
+        id: Date.now().toString(),
+        type: 'arrowmarkdown',
+        price1: clickedPrice,
+        startLogical: clickedLogical,
+      });
+      if (onToolUsed) onToolUsed();
+      return;
+    }
 
     // ─── 1-CLICK LINE TOOLS ───
     if (activeTool === 'horizontalline') {
@@ -148,7 +245,8 @@ export default function DrawingOverlay({
     // ─── 2-CLICK TOOLS ───
     const twoClickTools = [
       'trendline', 'ray', 'infoline', 'extendedline', 'trendangle',
-      'fibretracement', 'fibextension'
+      'fibretracement', 'fibextension', 'rectangle', 'rotatedrectangle',
+      'arrow', 'arrowmarker', 'path'
     ];
 
     if (twoClickTools.includes(activeTool)) {
@@ -245,25 +343,6 @@ export default function DrawingOverlay({
     }
   };
 
-  // Mouse move handler for live line draft
-  const handleMouseMoveDraft = (e) => {
-    if (!lineDraft || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-
-    const currentPrice = yToPrice(clickY);
-    const currentLogical = xToLogical(clickX);
-
-    if (currentPrice != null && currentLogical != null) {
-      setLineDraft(prev => ({
-        ...prev,
-        price2: currentPrice,
-        endLogical: currentLogical,
-      }));
-    }
-  };
-
   // Global window drag handler for smooth handle dragging & entire object moving
   const startDragging = (e, drawing, handleType) => {
     e.preventDefault();
@@ -331,7 +410,6 @@ export default function DrawingOverlay({
           endLogical: currentLogical ?? initialDrawing.endLogical,
         });
       } else if (handleType === 'move') {
-        // Drag entire Fibonacci or Line drawing across price & time
         if (startMousePrice != null && currentPrice != null) {
           const deltaPrice = currentPrice - startMousePrice;
           const updates = {
@@ -365,16 +443,216 @@ export default function DrawingOverlay({
   const hs = 8;
   const hitboxSize = 20;
 
+  // Helper to build SVG path string from points array
+  const buildSvgPath = (points) => {
+    if (!points || points.length === 0) return '';
+    let d = '';
+    points.forEach((pt, i) => {
+      const px = logicalToX(pt.logical);
+      const py = priceToY(pt.price);
+      if (px != null && py != null) {
+        d += i === 0 ? `M ${px} ${py}` : ` L ${px} ${py}`;
+      }
+    });
+    return d;
+  };
+
   return (
     <div
       ref={containerRef}
       className={`drawing-overlay ${activeTool !== 'cursor' ? 'interactive-tool-mode' : ''}`}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
       onClick={handleContainerClick}
-      onMouseMove={handleMouseMoveDraft}
     >
       <svg className="overlay-svg">
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#2962ff" />
+          </marker>
+        </defs>
+
         {drawings.map((drawing) => {
-          // ─── 1. FIBONACCI RETRACEMENT ───
+          // ─── 1. FREEHAND BRUSH & HIGHLIGHTER ───
+          if (drawing.type === 'brush' || drawing.type === 'highlighter') {
+            const pathD = buildSvgPath(drawing.points);
+            if (!pathD) return null;
+
+            const isHighlighter = drawing.type === 'highlighter';
+
+            return (
+              <g key={drawing.id} className="brush-group">
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke={isHighlighter ? '#ffeb3b' : '#2962ff'}
+                  strokeWidth={isHighlighter ? 14 : 3}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity={isHighlighter ? 0.38 : 1}
+                />
+                {/* Delete Button at end point */}
+                {drawing.points && drawing.points.length > 0 && (() => {
+                  const lastPt = drawing.points[drawing.points.length - 1];
+                  const lx = logicalToX(lastPt.logical);
+                  const ly = priceToY(lastPt.price);
+                  if (lx == null || ly == null) return null;
+
+                  return (
+                    <g
+                      className="delete-icon"
+                      transform={`translate(${lx + 10}, ${ly - 10})`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveDrawing(drawing.id);
+                      }}
+                      style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                    >
+                      <circle cx="10" cy="10" r="10" fill="#1e1e2d" stroke="rgba(255,255,255,0.4)" />
+                      <text x="6.5" y="13.5" fill="#f43f5e" fontSize="11" fontWeight="bold">✕</text>
+                    </g>
+                  );
+                })()}
+              </g>
+            );
+          }
+
+          // ─── 2. RECTANGLE ───
+          if (drawing.type === 'rectangle' || drawing.type === 'rotatedrectangle') {
+            const y1 = priceToY(drawing.price1);
+            const y2 = priceToY(drawing.price2);
+            const x1 = logicalToX(drawing.startLogical);
+            const x2 = logicalToX(drawing.endLogical);
+
+            if (y1 == null || y2 == null || x1 == null || x2 == null) return null;
+
+            const top = Math.min(y1, y2);
+            const height = Math.abs(y1 - y2);
+            const left = Math.min(x1, x2);
+            const width = Math.abs(x1 - x2);
+
+            return (
+              <g key={drawing.id} className="rectangle-group">
+                <rect
+                  x={left}
+                  y={top}
+                  width={Math.max(4, width)}
+                  height={Math.max(4, height)}
+                  fill="rgba(41, 98, 255, 0.16)"
+                  stroke="#2962ff"
+                  strokeWidth="1.5"
+                  style={{ cursor: 'grab', pointerEvents: 'auto' }}
+                  onMouseDown={(e) => startDragging(e, drawing, 'move')}
+                />
+
+                {/* Corner Handles */}
+                <g style={{ cursor: 'pointer', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, 'p1')}>
+                  <rect x={x1 - hs / 2} y={y1 - hs / 2} width={hs} height={hs} className="tv-handle-square" />
+                </g>
+                <g style={{ cursor: 'pointer', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, 'p2')}>
+                  <rect x={x2 - hs / 2} y={y2 - hs / 2} width={hs} height={hs} className="tv-handle-square" />
+                </g>
+
+                {/* Delete Button */}
+                <g
+                  className="delete-icon"
+                  transform={`translate(${left + width + 10}, ${top - 10})`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveDrawing(drawing.id);
+                  }}
+                  style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                >
+                  <circle cx="10" cy="10" r="10" fill="#1e1e2d" stroke="rgba(255,255,255,0.4)" />
+                  <text x="6.5" y="13.5" fill="#f43f5e" fontSize="11" fontWeight="bold">✕</text>
+                </g>
+              </g>
+            );
+          }
+
+          // ─── 3. ARROW & ARROW MARKER ───
+          if (drawing.type === 'arrow' || drawing.type === 'arrowmarker') {
+            const y1 = priceToY(drawing.price1);
+            const y2 = priceToY(drawing.price2);
+            const x1 = logicalToX(drawing.startLogical);
+            const x2 = logicalToX(drawing.endLogical);
+
+            if (y1 == null || y2 == null || x1 == null || x2 == null) return null;
+
+            return (
+              <g key={drawing.id} className="arrow-group">
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke="#2962ff"
+                  strokeWidth="2"
+                  markerEnd="url(#arrowhead)"
+                  style={{ cursor: 'grab', pointerEvents: 'auto' }}
+                  onMouseDown={(e) => startDragging(e, drawing, 'move')}
+                />
+
+                <g style={{ cursor: 'pointer', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, 'p1')}>
+                  <rect x={x1 - hs / 2} y={y1 - hs / 2} width={hs} height={hs} className="tv-handle-square" />
+                </g>
+
+                <g style={{ cursor: 'pointer', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, 'p2')}>
+                  <rect x={x2 - hs / 2} y={y2 - hs / 2} width={hs} height={hs} className="tv-handle-square" />
+                </g>
+
+                <g
+                  className="delete-icon"
+                  transform={`translate(${x2 + 10}, ${y2 - 10})`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveDrawing(drawing.id);
+                  }}
+                  style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                >
+                  <circle cx="10" cy="10" r="10" fill="#1e1e2d" stroke="rgba(255,255,255,0.4)" />
+                  <text x="6.5" y="13.5" fill="#f43f5e" fontSize="11" fontWeight="bold">✕</text>
+                </g>
+              </g>
+            );
+          }
+
+          // ─── 4. ARROW MARK UP / DOWN ───
+          if (drawing.type === 'arrowmarkup' || drawing.type === 'arrowmarkdown') {
+            const y = priceToY(drawing.price1);
+            const x = logicalToX(drawing.startLogical);
+
+            if (y == null || x == null) return null;
+
+            const isUp = drawing.type === 'arrowmarkup';
+
+            return (
+              <g key={drawing.id} className="arrow-stamp-group" transform={`translate(${x}, ${y})`}>
+                <polygon
+                  points={isUp ? '0,-14 -10,6 -4,6 -4,14 4,14 4,6 10,6' : '0,14 -10,-6 -4,-6 -4,-14 4,-14 4,-6 10,-6'}
+                  fill={isUp ? '#10b981' : '#f43f5e'}
+                  stroke="#ffffff"
+                  strokeWidth="1"
+                />
+
+                <g
+                  className="delete-icon"
+                  transform="translate(14, -10)"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveDrawing(drawing.id);
+                  }}
+                  style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                >
+                  <circle cx="10" cy="10" r="10" fill="#1e1e2d" stroke="rgba(255,255,255,0.4)" />
+                  <text x="6.5" y="13.5" fill="#f43f5e" fontSize="11" fontWeight="bold">✕</text>
+                </g>
+              </g>
+            );
+          }
+
+          // ─── 5. FIBONACCI RETRACEMENT ───
           if (drawing.type === 'fibretracement') {
             const x1 = logicalToX(drawing.startLogical);
             const x2 = logicalToX(drawing.endLogical);
@@ -407,7 +685,6 @@ export default function DrawingOverlay({
 
             return (
               <g key={drawing.id} className="fib-group">
-                {/* Diagonal trend connecting line (draggable to move entire Fib object) */}
                 <line
                   x1={x1}
                   y1={priceToY(p1)}
@@ -420,7 +697,6 @@ export default function DrawingOverlay({
                   onMouseDown={(e) => startDragging(e, drawing, 'move')}
                 />
 
-                {/* Shaded ratio background bands (draggable to move entire Fib object) */}
                 {settings.showBackground && computedLevels.map((lvl, i) => {
                   if (i === 0 || lvl.y == null) return null;
                   const prevLvl = computedLevels[i - 1];
@@ -444,7 +720,6 @@ export default function DrawingOverlay({
                   );
                 })}
 
-                {/* Level horizontal lines & text labels */}
                 {computedLevels.map((lvl, i) => {
                   if (lvl.y == null) return null;
 
@@ -460,25 +735,21 @@ export default function DrawingOverlay({
                   );
                 })}
 
-                {/* Point 1 Handle */}
                 <g style={{ cursor: 'pointer', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, 'p1')}>
                   <rect x={x1 - hitboxSize / 2} y={priceToY(p1) - hitboxSize / 2} width={hitboxSize} height={hitboxSize} fill="transparent" />
                   <rect x={x1 - hs / 2} y={priceToY(p1) - hs / 2} width={hs} height={hs} className="tv-handle-square" />
                 </g>
 
-                {/* Point 2 Handle */}
                 <g style={{ cursor: 'pointer', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, 'p2')}>
                   <rect x={x2 - hitboxSize / 2} y={priceToY(p2) - hitboxSize / 2} width={hitboxSize} height={hitboxSize} fill="transparent" />
                   <rect x={x2 - hs / 2} y={priceToY(p2) - hs / 2} width={hs} height={hs} className="tv-handle-square" />
                 </g>
 
-                {/* Settings Gear Button ⚙️ & Delete Button ✕ */}
                 <g
                   className="delete-icon"
                   transform={`translate(${rightX + 10}, ${priceToY(p2) - 10})`}
                   style={{ cursor: 'pointer', pointerEvents: 'auto' }}
                 >
-                  {/* Gear ⚙️ Settings button */}
                   <g onClick={(e) => {
                     e.stopPropagation();
                     setEditingFibDrawing(drawing);
@@ -487,7 +758,6 @@ export default function DrawingOverlay({
                     <text x="-18" y="14" fill="#3b82f6" fontSize="11">⚙️</text>
                   </g>
 
-                  {/* Delete ✕ button */}
                   <g onClick={(e) => {
                     e.stopPropagation();
                     onRemoveDrawing(drawing.id);
@@ -500,7 +770,7 @@ export default function DrawingOverlay({
             );
           }
 
-          // ─── 2. FIBONACCI EXTENSION ───
+          // ─── 6. FIBONACCI EXTENSION ───
           if (drawing.type === 'fibextension') {
             const x1 = logicalToX(drawing.startLogical);
             const x2 = logicalToX(drawing.endLogical);
@@ -554,19 +824,16 @@ export default function DrawingOverlay({
                   );
                 })}
 
-                {/* Point 1 Handle */}
                 <g style={{ cursor: 'pointer', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, 'p1')}>
                   <rect x={x1 - hitboxSize / 2} y={priceToY(p1) - hitboxSize / 2} width={hitboxSize} height={hitboxSize} fill="transparent" />
                   <rect x={x1 - hs / 2} y={priceToY(p1) - hs / 2} width={hs} height={hs} className="tv-handle-square" />
                 </g>
 
-                {/* Point 2 Handle */}
                 <g style={{ cursor: 'pointer', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, 'p2')}>
                   <rect x={x2 - hitboxSize / 2} y={priceToY(p2) - hitboxSize / 2} width={hitboxSize} height={hitboxSize} fill="transparent" />
                   <rect x={x2 - hs / 2} y={priceToY(p2) - hs / 2} width={hs} height={hs} className="tv-handle-square" />
                 </g>
 
-                {/* Delete Button */}
                 <g
                   className="delete-icon"
                   transform={`translate(${rightX + 10}, ${priceToY(p2) - 10})`}
@@ -583,7 +850,7 @@ export default function DrawingOverlay({
             );
           }
 
-          // ─── 3. HORIZONTAL LINE ───
+          // ─── 7. HORIZONTAL LINE ───
           if (drawing.type === 'horizontalline') {
             const y = priceToY(drawing.price1);
             if (y == null) return null;
@@ -592,14 +859,12 @@ export default function DrawingOverlay({
               <g key={drawing.id} className="line-group">
                 <line x1="0" y1={y} x2="100%" y2={y} stroke="#2962ff" strokeWidth="2" strokeDasharray="6 4" />
 
-                {/* Price Badge on scale */}
                 <foreignObject x="90%" y={y - 12} width="100" height="24" style={{ pointerEvents: 'none' }}>
                   <div className="tv-line-badge blue">
                     <span>{drawing.price1.toLocaleString('id-ID')}</span>
                   </div>
                 </foreignObject>
 
-                {/* Delete Button */}
                 <g
                   className="delete-icon"
                   transform={`translate(30, ${y - 10})`}
@@ -616,7 +881,7 @@ export default function DrawingOverlay({
             );
           }
 
-          // ─── 4. VERTICAL LINE ───
+          // ─── 8. VERTICAL LINE ───
           if (drawing.type === 'verticalline') {
             const x = logicalToX(drawing.startLogical);
             if (x == null) return null;
@@ -625,7 +890,6 @@ export default function DrawingOverlay({
               <g key={drawing.id} className="line-group">
                 <line x1={x} y1="0" x2={x} y2="100%" stroke="#2962ff" strokeWidth="2" strokeDasharray="6 4" />
 
-                {/* Delete Button */}
                 <g
                   className="delete-icon"
                   transform={`translate(${x - 10}, 30)`}
@@ -642,7 +906,7 @@ export default function DrawingOverlay({
             );
           }
 
-          // ─── 5. HORIZONTAL RAY ───
+          // ─── 9. HORIZONTAL RAY ───
           if (drawing.type === 'horizontalray') {
             const y = priceToY(drawing.price1);
             const x = logicalToX(drawing.startLogical);
@@ -653,7 +917,6 @@ export default function DrawingOverlay({
                 <line x1={x} y1={y} x2="100%" y2={y} stroke="#2962ff" strokeWidth="2" />
                 <rect x={x - hs / 2} y={y - hs / 2} width={hs} height={hs} className="tv-handle-square" />
 
-                {/* Delete Button */}
                 <g
                   className="delete-icon"
                   transform={`translate(${x + 20}, ${y - 10})`}
@@ -670,7 +933,7 @@ export default function DrawingOverlay({
             );
           }
 
-          // ─── 6. CROSSLINE ───
+          // ─── 10. CROSSLINE ───
           if (drawing.type === 'crossline') {
             const y = priceToY(drawing.price1);
             const x = logicalToX(drawing.startLogical);
@@ -682,7 +945,6 @@ export default function DrawingOverlay({
                 <line x1={x} y1="0" x2={x} y2="100%" stroke="#2962ff" strokeWidth="1.5" strokeDasharray="4 4" />
                 <circle cx={x} cy={y} r="4" fill="#2962ff" stroke="#ffffff" strokeWidth="1" />
 
-                {/* Delete Button */}
                 <g
                   className="delete-icon"
                   transform={`translate(${x + 12}, ${y - 10})`}
@@ -699,8 +961,8 @@ export default function DrawingOverlay({
             );
           }
 
-          // ─── 7. TRENDLINE / RAY / EXTENDED LINE / INFO LINE ───
-          if (['trendline', 'ray', 'infoline', 'extendedline', 'trendangle'].includes(drawing.type)) {
+          // ─── 11. TRENDLINE / RAY / EXTENDED LINE / INFO LINE / PATH ───
+          if (['trendline', 'ray', 'infoline', 'extendedline', 'trendangle', 'path'].includes(drawing.type)) {
             const y1 = priceToY(drawing.price1);
             const y2 = priceToY(drawing.price2);
             const x1 = logicalToX(drawing.startLogical);
@@ -721,19 +983,16 @@ export default function DrawingOverlay({
                   onMouseDown={(e) => startDragging(e, drawing, 'move')}
                 />
 
-                {/* Point 1 Handle */}
                 <g style={{ cursor: 'pointer', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, 'p1')}>
                   <rect x={x1 - hitboxSize / 2} y={y1 - hitboxSize / 2} width={hitboxSize} height={hitboxSize} fill="transparent" />
                   <rect x={x1 - hs / 2} y={y1 - hs / 2} width={hs} height={hs} className="tv-handle-square" />
                 </g>
 
-                {/* Point 2 Handle */}
                 <g style={{ cursor: 'pointer', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, 'p2')}>
                   <rect x={x2 - hitboxSize / 2} y={y2 - hitboxSize / 2} width={hitboxSize} height={hitboxSize} fill="transparent" />
                   <rect x={x2 - hs / 2} y={y2 - hs / 2} width={hs} height={hs} className="tv-handle-square" />
                 </g>
 
-                {/* Delete Button */}
                 <g
                   className="delete-icon"
                   transform={`translate(${x2 + 10}, ${y2 - 10})`}
@@ -750,7 +1009,7 @@ export default function DrawingOverlay({
             );
           }
 
-          // ─── 8. LONG / SHORT POSITION OVERLAY ───
+          // ─── 12. LONG / SHORT POSITION OVERLAY ───
           if (drawing.type === 'long' || drawing.type === 'short') {
             const entryY = priceToY(drawing.entryPrice);
             const tpY = priceToY(drawing.tpPrice);
@@ -800,7 +1059,6 @@ export default function DrawingOverlay({
 
             return (
               <g key={drawing.id} className="position-group">
-                {/* Green Zone (Target Box) */}
                 <rect
                   x={x}
                   y={greenY}
@@ -811,7 +1069,6 @@ export default function DrawingOverlay({
                   strokeWidth="1"
                 />
 
-                {/* Red Zone (Stop Box) */}
                 <rect
                   x={x}
                   y={redY}
@@ -822,7 +1079,6 @@ export default function DrawingOverlay({
                   strokeWidth="1"
                 />
 
-                {/* Entry Center Line */}
                 <line
                   x1={x}
                   y1={entryY}
@@ -833,7 +1089,6 @@ export default function DrawingOverlay({
                   strokeDasharray="4 3"
                 />
 
-                {/* Top Pill Label */}
                 <foreignObject
                   x={x + 10}
                   y={topBoxY - 32}
@@ -848,7 +1103,6 @@ export default function DrawingOverlay({
                   </div>
                 </foreignObject>
 
-                {/* Bottom Pill Label */}
                 <foreignObject
                   x={x + 10}
                   y={bottomBoxY + bottomBoxHeight + 6}
@@ -863,7 +1117,6 @@ export default function DrawingOverlay({
                   </div>
                 </foreignObject>
 
-                {/* Center Badge */}
                 <foreignObject
                   x={x + (width - 190) / 2}
                   y={entryY - 14}
@@ -876,7 +1129,6 @@ export default function DrawingOverlay({
                   </div>
                 </foreignObject>
 
-                {/* Blue Square Drag Handles */}
                 <g style={{ cursor: 'ns-resize', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, isLong ? 'tp' : 'sl')}>
                   <rect x={x - hitboxSize / 2} y={topBoxY - hitboxSize / 2} width={hitboxSize} height={hitboxSize} fill="transparent" />
                   <rect x={x - hs / 2} y={topBoxY - hs / 2} width={hs} height={hs} className="tv-handle-square" />
@@ -907,7 +1159,6 @@ export default function DrawingOverlay({
                   <rect x={x + width - hs / 2} y={bottomBoxY + bottomBoxHeight - hs / 2} width={hs} height={hs} className="tv-handle-square" />
                 </g>
 
-                {/* Delete Button */}
                 <g
                   className="delete-icon"
                   transform={`translate(${x + width + 10}, ${entryY - 10})`}
@@ -973,7 +1224,26 @@ export default function DrawingOverlay({
           return null;
         })}
 
-        {/* Live Draft Line while drawing 2-click lines / fibs */}
+        {/* Live Active Freehand Brush / Highlighter Stroke */}
+        {activeFreehandStroke && (() => {
+          const pathD = buildSvgPath(activeFreehandStroke.points);
+          if (!pathD) return null;
+          const isHighlighter = activeFreehandStroke.type === 'highlighter';
+
+          return (
+            <path
+              d={pathD}
+              fill="none"
+              stroke={isHighlighter ? '#ffeb3b' : '#2962ff'}
+              strokeWidth={isHighlighter ? 14 : 3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity={isHighlighter ? 0.4 : 1}
+            />
+          );
+        })()}
+
+        {/* Live Draft Line while drawing 2-click lines / fibs / shapes */}
         {lineDraft && (() => {
           const y1 = priceToY(lineDraft.price1);
           const y2 = priceToY(lineDraft.price2);
@@ -981,6 +1251,16 @@ export default function DrawingOverlay({
           const x2 = logicalToX(lineDraft.endLogical);
 
           if (y1 == null || y2 == null || x1 == null || x2 == null) return null;
+
+          if (lineDraft.tool === 'rectangle') {
+            const top = Math.min(y1, y2);
+            const height = Math.abs(y1 - y2);
+            const left = Math.min(x1, x2);
+            const width = Math.abs(x1 - x2);
+            return (
+              <rect x={left} y={top} width={width} height={height} fill="rgba(41, 98, 255, 0.15)" stroke="#2962ff" strokeWidth="1.5" strokeDasharray="4 2" />
+            );
+          }
 
           return (
             <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#2962ff" strokeWidth="2" strokeDasharray="4 4" />
