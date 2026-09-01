@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { STOCKS } from '../config/stocks';
 import { loadStockData } from '../utils/dataLoader';
+import { aggregateToWeekly } from '../utils/timeframeUtils';
 import { useReplayEngine } from '../hooks/useReplayEngine';
 import CandlestickChart from './CandlestickChart';
 import ReplayControls from './ReplayControls';
@@ -12,9 +13,19 @@ import ReplayFinished from './ReplayFinished';
  */
 export default function ReplayScreen() {
   const [selectedTicker, setSelectedTicker] = useState(STOCKS[0].ticker);
+  const [timeframe, setTimeframe] = useState('1D');
   const [stockData, setStockData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Transform data based on active timeframe (1D or 1W)
+  const activeData = useMemo(() => {
+    if (!stockData) return null;
+    if (timeframe === '1W') {
+      return aggregateToWeekly(stockData);
+    }
+    return stockData;
+  }, [stockData, timeframe]);
 
   // Fetch full stock data when ticker changes
   useEffect(() => {
@@ -62,7 +73,7 @@ export default function ReplayScreen() {
     resetToCutoff,
     changeSpeed,
     dismissFinishedModal,
-  } = useReplayEngine(stockData);
+  } = useReplayEngine(activeData);
 
   return (
     <div className="replay-workspace">
@@ -93,7 +104,22 @@ export default function ReplayScreen() {
             </select>
           </div>
 
-          <span className="timeframe-badge">1D</span>
+          <div className="timeframe-selector">
+            <button
+              className={`timeframe-btn ${timeframe === '1D' ? 'active' : ''}`}
+              onClick={() => setTimeframe('1D')}
+              title="Timeframe Harian (Daily)"
+            >
+              1D
+            </button>
+            <button
+              className={`timeframe-btn ${timeframe === '1W' ? 'active' : ''}`}
+              onClick={() => setTimeframe('1W')}
+              title="Timeframe Mingguan (Weekly)"
+            >
+              1W
+            </button>
+          </div>
         </div>
 
         <div className="header-right">
@@ -138,6 +164,7 @@ export default function ReplayScreen() {
           <CandlestickChart
             data={visibleCandles}
             ticker={selectedTicker}
+            timeframe={timeframe}
             isPicking={mode === 'picking'}
             onSelectCandleTime={selectCutoffByTime}
           />

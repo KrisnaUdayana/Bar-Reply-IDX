@@ -17,6 +17,7 @@ export default function CandlestickChart({
   ticker,
   isPicking = false,
   onSelectCandleTime,
+  timeframe = '1D',
 }) {
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
@@ -137,7 +138,7 @@ export default function CandlestickChart({
     <div className={`chart-wrapper ${isPicking ? 'is-picking-mode' : ''}`}>
       <div className="chart-header">
         <span className="chart-ticker">{ticker}</span>
-        <span className="chart-timeframe">1D</span>
+        <span className="chart-timeframe">{timeframe}</span>
         {isPicking && (
           <span className="picking-badge">
             ✂️ Klik candle pada chart untuk memotong replay dari titik tersebut
