@@ -101,9 +101,9 @@ export function useReplayEngine(fullData) {
   }, []);
 
   // Select replay cutoff point (via clicking candle or date)
-  const selectCutoffByTime = useCallback((timeStr) => {
+  const selectCutoffByTime = useCallback((timeVal) => {
     if (!fullData) return;
-    const idx = fullData.findIndex(c => c.time === timeStr);
+    const idx = fullData.findIndex(c => c.time === timeVal || String(c.time) === String(timeVal));
     if (idx !== -1) {
       setCutoffIndex(idx);
       setCurrentIndex(idx);

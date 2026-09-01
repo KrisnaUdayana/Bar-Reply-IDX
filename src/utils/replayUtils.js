@@ -37,12 +37,27 @@ export function getReplayData(allData, startDate, rangeDays) {
 }
 
 /**
- * Format a date string (YYYY-MM-DD) to localized display format.
- * @param {string} dateStr - Date string in YYYY-MM-DD format
- * @returns {string} - Formatted date (e.g., "15 Jan 2025")
+ * Format a date string (YYYY-MM-DD) or Unix timestamp to localized display format.
+ * @param {string|number} dateVal - Date string in YYYY-MM-DD or Unix timestamp in seconds
+ * @returns {string} - Formatted date (e.g., "15 Jan 2025" or "15 Jan 2025, 09:00")
  */
-export function formatDate(dateStr) {
-  const date = new Date(dateStr + 'T00:00:00');
+export function formatDate(dateVal) {
+  if (!dateVal) return '';
+
+  if (typeof dateVal === 'number') {
+    const date = new Date(dateVal * 1000);
+    return date.toLocaleDateString('id-ID', {
+      timeZone: 'Asia/Jakarta',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).replace('.', ':');
+  }
+
+  const date = new Date(dateVal.includes('T') ? dateVal : dateVal + 'T00:00:00');
   return date.toLocaleDateString('id-ID', {
     day: 'numeric',
     month: 'short',

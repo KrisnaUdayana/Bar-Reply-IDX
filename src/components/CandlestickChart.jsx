@@ -17,6 +17,7 @@ export default function CandlestickChart({
   ticker,
   isPicking = false,
   onSelectCandleTime,
+  timeframe = '1D',
 }) {
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
@@ -43,6 +44,24 @@ export default function CandlestickChart({
         textColor: 'rgba(255, 255, 255, 0.6)',
         fontFamily: "'Inter', sans-serif",
         fontSize: 12,
+      },
+      localization: {
+        locale: 'id-ID',
+        timeFormatter: (time) => {
+          if (typeof time === 'number') {
+            const d = new Date(time * 1000);
+            return d.toLocaleString('id-ID', {
+              timeZone: 'Asia/Jakarta',
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            }).replace('.', ':');
+          }
+          return String(time);
+        },
       },
       grid: {
         vertLines: { color: 'rgba(255, 255, 255, 0.04)' },
@@ -73,6 +92,26 @@ export default function CandlestickChart({
         rightOffset: 5,
         barSpacing: 12,
         minBarSpacing: 4,
+        tickMarkFormatter: (time, tickMarkType) => {
+          if (typeof time === 'number') {
+            const date = new Date(time * 1000);
+            // tickMarkType: 0 = Year, 1 = Month, 2 = DayOfMonth, 3 = Time, 4 = TimeWithSeconds
+            if (tickMarkType <= 2) {
+              return date.toLocaleDateString('id-ID', {
+                timeZone: 'Asia/Jakarta',
+                day: 'numeric',
+                month: 'short',
+              });
+            }
+            return date.toLocaleTimeString('id-ID', {
+              timeZone: 'Asia/Jakarta',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            }).replace('.', ':');
+          }
+          return null;
+        },
       },
       handleScroll: {
         mouseWheel: true,
@@ -95,14 +134,17 @@ export default function CandlestickChart({
     // Subscribe to chart click event for picking replay candle
     chart.subscribeClick((param) => {
       if (!isPickingRef.current) return;
-      if (!param.time) return;
+      if (param.time == null) return;
 
-      const timeStr = typeof param.time === 'string'
-        ? param.time
-        : `${param.time.year}-${String(param.time.month).padStart(2, '0')}-${String(param.time.day).padStart(2, '0')}`;
+      let timeVal;
+      if (typeof param.time === 'number' || typeof param.time === 'string') {
+        timeVal = param.time;
+      } else if (typeof param.time === 'object' && param.time !== null) {
+        timeVal = `${param.time.year}-${String(param.time.month).padStart(2, '0')}-${String(param.time.day).padStart(2, '0')}`;
+      }
 
-      if (onSelectCandleTimeRef.current) {
-        onSelectCandleTimeRef.current(timeStr);
+      if (timeVal != null && onSelectCandleTimeRef.current) {
+        onSelectCandleTimeRef.current(timeVal);
       }
     });
 
@@ -126,6 +168,18 @@ export default function CandlestickChart({
     };
   }, []);
 
+  // Update chart options when timeframe changes
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const isHourly = ['1H', '2H', '3H', '4H'].includes(timeframe);
+    chartRef.current.applyOptions({
+      timeScale: {
+        timeVisible: isHourly,
+        secondsVisible: false,
+      },
+    });
+  }, [timeframe]);
+
   // Update data when visible candles change
   useEffect(() => {
     if (!seriesRef.current || !data || data.length === 0) return;
@@ -137,7 +191,7 @@ export default function CandlestickChart({
     <div className={`chart-wrapper ${isPicking ? 'is-picking-mode' : ''}`}>
       <div className="chart-header">
         <span className="chart-ticker">{ticker}</span>
-        <span className="chart-timeframe">1D</span>
+        <span className="chart-timeframe">{timeframe}</span>
         {isPicking && (
           <span className="picking-badge">
             ✂️ Klik candle pada chart untuk memotong replay dari titik tersebut
