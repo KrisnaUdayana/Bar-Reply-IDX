@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import FibSettingsModal, { DEFAULT_FIB_LEVELS } from './FibSettingsModal';
 
 /**
- * 1:1 TradingView Position & Lines Overlay Component.
- * Supports: Long/Short position, Ruler, Trendline, Ray, Horizontal Line, Vertical Line, Horizontal Ray, Crossline.
- * Anchors drawings to chart logical indices & price levels with 60 FPS real-time rendering.
+ * 1:1 TradingView Position, Lines, & Fibonacci Overlay Component.
+ * Supports: Long/Short position, Ruler, Trendline, Ray, Horizontal Line, Vertical Line, Horizontal Ray, Crossline, Fib Retracement, & Fib Settings Modal.
  *
  * @param {{
  *   chartRef: React.RefObject,
@@ -30,6 +30,7 @@ export default function DrawingOverlay({
   const [, setRenderTrigger] = useState(0);
   const [rulerDraft, setRulerDraft] = useState(null);
   const [lineDraft, setLineDraft] = useState(null);
+  const [editingFibDrawing, setEditingFibDrawing] = useState(null);
 
   // 60 FPS animation loop to keep SVG overlay perfectly synced during pan, scroll, zoom, and price scale drags
   useEffect(() => {
@@ -143,16 +144,20 @@ export default function DrawingOverlay({
       return;
     }
 
-    // ─── 2-CLICK LINE TOOLS (Trendline, Ray, Info line, Extended line, Trend angle) ───
-    const twoClickLineTools = ['trendline', 'ray', 'infoline', 'extendedline', 'trendangle'];
-    if (twoClickLineTools.includes(activeTool)) {
+    // ─── 2-CLICK TOOLS ───
+    const twoClickTools = [
+      'trendline', 'ray', 'infoline', 'extendedline', 'trendangle',
+      'fibretracement', 'fibextension'
+    ];
+
+    if (twoClickTools.includes(activeTool)) {
       if (!lineDraft) {
         setLineDraft({
           tool: activeTool,
           price1: clickedPrice,
           startLogical: clickedLogical,
           price2: clickedPrice,
-          endLogical: clickedLogical + 5,
+          endLogical: clickedLogical + 10,
         });
       } else {
         onAddDrawing({
@@ -162,6 +167,13 @@ export default function DrawingOverlay({
           startLogical: lineDraft.startLogical,
           price2: clickedPrice,
           endLogical: clickedLogical,
+          fibSettings: {
+            levels: DEFAULT_FIB_LEVELS,
+            useOneColor: false,
+            singleColor: '#2962ff',
+            showBackground: true,
+            bgOpacity: 0.15,
+          },
         });
         setLineDraft(null);
         if (onToolUsed) onToolUsed();
@@ -339,7 +351,194 @@ export default function DrawingOverlay({
     >
       <svg className="overlay-svg">
         {drawings.map((drawing) => {
-          // ─── 1. HORIZONTAL LINE ───
+          // ─── 1. FIBONACCI RETRACEMENT ───
+          if (drawing.type === 'fibretracement') {
+            const x1 = logicalToX(drawing.startLogical);
+            const x2 = logicalToX(drawing.endLogical);
+            const p1 = drawing.price1;
+            const p2 = drawing.price2;
+
+            if (x1 == null || x2 == null || p1 == null || p2 == null) return null;
+
+            const leftX = Math.min(x1, x2);
+            const rightX = Math.max(x1, x2);
+
+            const settings = drawing.fibSettings || {
+              levels: DEFAULT_FIB_LEVELS,
+              useOneColor: false,
+              singleColor: '#2962ff',
+              showBackground: true,
+              bgOpacity: 0.15,
+            };
+
+            const activeLevels = (settings.levels || DEFAULT_FIB_LEVELS)
+              .filter(l => l.enabled)
+              .sort((a, b) => a.ratio - b.ratio);
+
+            const computedLevels = activeLevels.map(item => {
+              const priceAtRatio = p1 + (p2 - p1) * item.ratio;
+              const y = priceToY(priceAtRatio);
+              const color = settings.useOneColor ? settings.singleColor : item.color;
+              return { ...item, color, price: Math.round(priceAtRatio), y };
+            });
+
+            return (
+              <g key={drawing.id} className="fib-group">
+                {/* Diagonal trend connecting line */}
+                <line x1={x1} y1={priceToY(p1)} x2={x2} y2={priceToY(p2)} stroke="rgba(255,255,255,0.4)" strokeWidth="1" strokeDasharray="3 3" />
+
+                {/* Shaded ratio background bands */}
+                {settings.showBackground && computedLevels.map((lvl, i) => {
+                  if (i === 0 || lvl.y == null) return null;
+                  const prevLvl = computedLevels[i - 1];
+                  if (prevLvl.y == null) return null;
+
+                  const topY = Math.min(prevLvl.y, lvl.y);
+                  const bandHeight = Math.abs(prevLvl.y - lvl.y);
+
+                  return (
+                    <rect
+                      key={`band-${i}`}
+                      x={leftX}
+                      y={topY}
+                      width={Math.max(20, rightX - leftX)}
+                      height={Math.max(1, bandHeight)}
+                      fill={lvl.color}
+                      fillOpacity={settings.bgOpacity ?? 0.15}
+                    />
+                  );
+                })}
+
+                {/* Level horizontal lines & text labels */}
+                {computedLevels.map((lvl, i) => {
+                  if (lvl.y == null) return null;
+
+                  return (
+                    <g key={`level-${i}`}>
+                      <line x1={leftX} y1={lvl.y} x2={rightX} y2={lvl.y} stroke={lvl.color} strokeWidth="1.5" />
+                      <foreignObject x={leftX + 6} y={lvl.y - 12} width="160" height="24" style={{ pointerEvents: 'none' }}>
+                        <div className="tv-fib-badge" style={{ color: lvl.color, pointerEvents: 'none' }}>
+                          <span>{lvl.ratio} ({lvl.price.toLocaleString('id-ID')})</span>
+                        </div>
+                      </foreignObject>
+                    </g>
+                  );
+                })}
+
+                {/* Point 1 Handle */}
+                <g style={{ cursor: 'pointer', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, 'p1')}>
+                  <rect x={x1 - hitboxSize / 2} y={priceToY(p1) - hitboxSize / 2} width={hitboxSize} height={hitboxSize} fill="transparent" />
+                  <rect x={x1 - hs / 2} y={priceToY(p1) - hs / 2} width={hs} height={hs} className="tv-handle-square" />
+                </g>
+
+                {/* Point 2 Handle */}
+                <g style={{ cursor: 'pointer', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, 'p2')}>
+                  <rect x={x2 - hitboxSize / 2} y={priceToY(p2) - hitboxSize / 2} width={hitboxSize} height={hitboxSize} fill="transparent" />
+                  <rect x={x2 - hs / 2} y={priceToY(p2) - hs / 2} width={hs} height={hs} className="tv-handle-square" />
+                </g>
+
+                {/* Settings Gear Button ⚙️ & Delete Button ✕ */}
+                <g
+                  className="delete-icon"
+                  transform={`translate(${rightX + 10}, ${priceToY(p2) - 10})`}
+                  style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                >
+                  {/* Gear ⚙️ Settings button */}
+                  <g onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingFibDrawing(drawing);
+                  }}>
+                    <circle cx="-14" cy="10" r="10" fill="#1e1e2d" stroke="rgba(255,255,255,0.4)" />
+                    <text x="-18" y="14" fill="#3b82f6" fontSize="11">⚙️</text>
+                  </g>
+
+                  {/* Delete ✕ button */}
+                  <g onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveDrawing(drawing.id);
+                  }}>
+                    <circle cx="10" cy="10" r="10" fill="#1e1e2d" stroke="rgba(255,255,255,0.4)" />
+                    <text x="6.5" y="13.5" fill="#f43f5e" fontSize="11" fontWeight="bold">✕</text>
+                  </g>
+                </g>
+              </g>
+            );
+          }
+
+          // ─── 2. FIBONACCI EXTENSION ───
+          if (drawing.type === 'fibextension') {
+            const x1 = logicalToX(drawing.startLogical);
+            const x2 = logicalToX(drawing.endLogical);
+            const p1 = drawing.price1;
+            const p2 = drawing.price2;
+
+            if (x1 == null || x2 == null || p1 == null || p2 == null) return null;
+
+            const leftX = Math.min(x1, x2);
+            const rightX = Math.max(x1, x2);
+
+            const extRatios = [
+              { ratio: 0.618, color: '#2962ff', label: '0.618' },
+              { ratio: 1.0, color: '#787b86', label: '1.0' },
+              { ratio: 1.618, color: '#10b981', label: '1.618' },
+              { ratio: 2.618, color: '#f59e0b', label: '2.618' },
+            ];
+
+            const computedLevels = extRatios.map(item => {
+              const priceAtRatio = p1 + (p2 - p1) * item.ratio;
+              const y = priceToY(priceAtRatio);
+              return { ...item, price: Math.round(priceAtRatio), y };
+            });
+
+            return (
+              <g key={drawing.id} className="fib-group">
+                <line x1={x1} y1={priceToY(p1)} x2={x2} y2={priceToY(p2)} stroke="rgba(255,255,255,0.4)" strokeWidth="1" strokeDasharray="3 3" />
+
+                {computedLevels.map((lvl, i) => {
+                  if (lvl.y == null) return null;
+
+                  return (
+                    <g key={`ext-${i}`}>
+                      <line x1={leftX} y1={lvl.y} x2={rightX} y2={lvl.y} stroke={lvl.color} strokeWidth="1.5" strokeDasharray="4 2" />
+                      <foreignObject x={leftX + 6} y={lvl.y - 12} width="160" height="24" style={{ pointerEvents: 'none' }}>
+                        <div className="tv-fib-badge" style={{ color: lvl.color, pointerEvents: 'none' }}>
+                          <span>{lvl.label} ({lvl.price.toLocaleString('id-ID')})</span>
+                        </div>
+                      </foreignObject>
+                    </g>
+                  );
+                })}
+
+                {/* Point 1 Handle */}
+                <g style={{ cursor: 'pointer', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, 'p1')}>
+                  <rect x={x1 - hitboxSize / 2} y={priceToY(p1) - hitboxSize / 2} width={hitboxSize} height={hitboxSize} fill="transparent" />
+                  <rect x={x1 - hs / 2} y={priceToY(p1) - hs / 2} width={hs} height={hs} className="tv-handle-square" />
+                </g>
+
+                {/* Point 2 Handle */}
+                <g style={{ cursor: 'pointer', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, 'p2')}>
+                  <rect x={x2 - hitboxSize / 2} y={priceToY(p2) - hitboxSize / 2} width={hitboxSize} height={hitboxSize} fill="transparent" />
+                  <rect x={x2 - hs / 2} y={priceToY(p2) - hs / 2} width={hs} height={hs} className="tv-handle-square" />
+                </g>
+
+                {/* Delete Button */}
+                <g
+                  className="delete-icon"
+                  transform={`translate(${rightX + 10}, ${priceToY(p2) - 10})`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveDrawing(drawing.id);
+                  }}
+                  style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                >
+                  <circle cx="10" cy="10" r="10" fill="#1e1e2d" stroke="rgba(255,255,255,0.4)" />
+                  <text x="6.5" y="13.5" fill="#f43f5e" fontSize="11" fontWeight="bold">✕</text>
+                </g>
+              </g>
+            );
+          }
+
+          // ─── 3. HORIZONTAL LINE ───
           if (drawing.type === 'horizontalline') {
             const y = priceToY(drawing.price1);
             if (y == null) return null;
@@ -372,7 +571,7 @@ export default function DrawingOverlay({
             );
           }
 
-          // ─── 2. VERTICAL LINE ───
+          // ─── 4. VERTICAL LINE ───
           if (drawing.type === 'verticalline') {
             const x = logicalToX(drawing.startLogical);
             if (x == null) return null;
@@ -398,7 +597,7 @@ export default function DrawingOverlay({
             );
           }
 
-          // ─── 3. HORIZONTAL RAY ───
+          // ─── 5. HORIZONTAL RAY ───
           if (drawing.type === 'horizontalray') {
             const y = priceToY(drawing.price1);
             const x = logicalToX(drawing.startLogical);
@@ -426,7 +625,7 @@ export default function DrawingOverlay({
             );
           }
 
-          // ─── 4. CROSSLINE ───
+          // ─── 6. CROSSLINE ───
           if (drawing.type === 'crossline') {
             const y = priceToY(drawing.price1);
             const x = logicalToX(drawing.startLogical);
@@ -455,7 +654,7 @@ export default function DrawingOverlay({
             );
           }
 
-          // ─── 5. TRENDLINE / RAY / EXTENDED LINE / INFO LINE ───
+          // ─── 7. TRENDLINE / RAY / EXTENDED LINE / INFO LINE ───
           if (['trendline', 'ray', 'infoline', 'extendedline', 'trendangle'].includes(drawing.type)) {
             const y1 = priceToY(drawing.price1);
             const y2 = priceToY(drawing.price2);
@@ -497,7 +696,7 @@ export default function DrawingOverlay({
             );
           }
 
-          // ─── 6. LONG / SHORT POSITION OVERLAY ───
+          // ─── 8. LONG / SHORT POSITION OVERLAY ───
           if (drawing.type === 'long' || drawing.type === 'short') {
             const entryY = priceToY(drawing.entryPrice);
             const tpY = priceToY(drawing.tpPrice);
@@ -720,7 +919,7 @@ export default function DrawingOverlay({
           return null;
         })}
 
-        {/* Live Draft Line while drawing 2-click lines */}
+        {/* Live Draft Line while drawing 2-click lines / fibs */}
         {lineDraft && (() => {
           const y1 = priceToY(lineDraft.price1);
           const y2 = priceToY(lineDraft.price2);
@@ -749,6 +948,17 @@ export default function DrawingOverlay({
           </g>
         )}
       </svg>
+
+      {/* Render Fib Settings Modal when ⚙️ icon is clicked */}
+      {editingFibDrawing && (
+        <FibSettingsModal
+          drawing={editingFibDrawing}
+          onSave={(newSettings) => {
+            onUpdateDrawing(editingFibDrawing.id, { fibSettings: newSettings });
+          }}
+          onClose={() => setEditingFibDrawing(null)}
+        />
+      )}
     </div>
   );
 }

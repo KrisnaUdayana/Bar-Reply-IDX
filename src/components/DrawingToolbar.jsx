@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 
 /**
- * Full TradingView-identical Left Drawing Toolbar with Flyout Popups (FORECASTING & LINES).
+ * Full TradingView-identical Left Drawing Toolbar with Flyout Popups (FORECASTING, LINES, FIBONACCI).
  *
  * @param {{
  *   activeTool: string,
@@ -16,7 +16,7 @@ export default function DrawingToolbar({
   onClearDrawings,
   drawingsCount = 0,
 }) {
-  const [activeFlyout, setActiveFlyout] = useState(null); // 'lines' | 'forecasting' | null
+  const [activeFlyout, setActiveFlyout] = useState(null); // 'lines' | 'forecasting' | 'fibonacci' | null
   const [isMagnetActive, setIsMagnetActive] = useState(false);
   const [isDrawingsHidden, setIsDrawingsHidden] = useState(false);
   const toolbarRef = useRef(null);
@@ -48,8 +48,9 @@ export default function DrawingToolbar({
     'trendline', 'ray', 'infoline', 'extendedline', 'trendangle',
     'horizontalline', 'horizontalray', 'verticalline', 'crossline'
   ];
-
+  const fibTools = ['fibretracement', 'fibextension'];
   const isLineActive = lineTools.includes(activeTool);
+  const isFibActive = fibTools.includes(activeTool);
   const isForecastingActive = activeTool === 'long' || activeTool === 'short';
 
   return (
@@ -68,7 +69,7 @@ export default function DrawingToolbar({
           </svg>
         </button>
 
-        {/* 2. LINES Tools (Trendline, Horizontal line, Vertical line, etc.) */}
+        {/* 2. LINES Tools */}
         <div className="tv-flyout-container">
           <button
             className={`tv-tool-btn ${isLineActive || activeFlyout === 'lines' ? 'active' : ''}`}
@@ -201,20 +202,62 @@ export default function DrawingToolbar({
           )}
         </div>
 
-        {/* 3. Gann & Fibonacci */}
-        <button
-          className="tv-tool-btn"
-          onClick={() => handleToolClick('cursor')}
-          title="Gann and Fibonacci Tools"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-            <circle cx="7" cy="6" r="2" fill="currentColor" />
-            <circle cx="14" cy="12" r="2" fill="currentColor" />
-          </svg>
-        </button>
+        {/* 3. FIBONACCI Tools (Fib retracement & Trend-based fib extension) */}
+        <div className="tv-flyout-container">
+          <button
+            className={`tv-tool-btn ${isFibActive || activeFlyout === 'fibonacci' ? 'active' : ''}`}
+            onClick={() => toggleFlyout('fibonacci')}
+            title="Fibonacci Tools (Fib Retracement, Extension)"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <line x1="3" y1="5" x2="21" y2="5" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+              <line x1="3" y1="15" x2="21" y2="15" />
+              <line x1="3" y1="20" x2="21" y2="20" />
+              <circle cx="6" cy="5" r="1.5" fill="currentColor" />
+              <circle cx="12" cy="10" r="1.5" fill="currentColor" />
+              <circle cx="18" cy="15" r="1.5" fill="currentColor" />
+            </svg>
+            <span className="tv-flyout-arrow">‹</span>
+          </button>
+
+          {/* FIBONACCI Flyout Menu */}
+          {activeFlyout === 'fibonacci' && (
+            <div className="tv-flyout-menu">
+              <div className="tv-flyout-header">FIBONACCI</div>
+
+              <button
+                className={`tv-flyout-item ${activeTool === 'fibretracement' ? 'selected' : ''}`}
+                onClick={() => handleToolClick('fibretracement')}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="tv-item-icon">
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                  <circle cx="6" cy="6" r="1.5" fill="currentColor" />
+                  <circle cx="18" cy="18" r="1.5" fill="currentColor" />
+                </svg>
+                <span>Fib retracement</span>
+                <span className="tv-hotkey">Alt + F</span>
+              </button>
+
+              <button
+                className={`tv-flyout-item ${activeTool === 'fibextension' ? 'selected' : ''}`}
+                onClick={() => handleToolClick('fibextension')}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="tv-item-icon">
+                  <path d="M4 18l6-6 4 4 6-8" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                  <circle cx="4" cy="18" r="1.5" fill="currentColor" />
+                  <circle cx="10" cy="12" r="1.5" fill="currentColor" />
+                  <circle cx="14" cy="16" r="1.5" fill="currentColor" />
+                  <circle cx="20" cy="8" r="1.5" fill="currentColor" />
+                </svg>
+                <span>Trend-based fib extension</span>
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* 4. Geometric Shapes & Patterns */}
         <button

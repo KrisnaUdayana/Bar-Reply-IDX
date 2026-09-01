@@ -699,6 +699,206 @@ body::before {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
+.tv-fib-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+}
+
+/* ─── TradingView Fibonacci Settings Modal ─── */
+.tv-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+  pointer-events: auto !important;
+}
+
+.tv-modal,
+.tv-modal * {
+  pointer-events: auto !important;
+}
+
+.tv-modal {
+  background: #1e222d;
+  border: 1px solid #2a2e39;
+  border-radius: 8px;
+  width: 440px;
+  max-width: 90vw;
+  color: #d1d4dc;
+  font-family: var(--font-family);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tv-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid #2a2e39;
+  font-weight: 600;
+  font-size: 14px;
+  color: #f0f3fa;
+}
+
+.tv-modal-close {
+  background: transparent;
+  border: none;
+  color: #787b86;
+  cursor: pointer;
+  font-size: 16px;
+  transition: color 0.15s ease;
+}
+
+.tv-modal-close:hover {
+  color: #f0f3fa;
+}
+
+.tv-modal-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 65vh;
+  overflow-y: auto;
+}
+
+.fib-levels-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 20px;
+}
+
+.fib-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fib-level-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tv-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #2962ff;
+  cursor: pointer;
+}
+
+.tv-input.fib-ratio-input {
+  background: #131722;
+  border: 1px solid #363a45;
+  border-radius: 4px;
+  color: #ffffff;
+  padding: 4px 8px;
+  font-size: 12px;
+  width: 76px;
+  outline: none;
+  font-weight: 500;
+}
+
+.tv-input.fib-ratio-input:focus {
+  border-color: #2962ff;
+}
+
+.tv-color-picker {
+  width: 26px;
+  height: 24px;
+  border: 1px solid #363a45;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.tv-modal-divider {
+  height: 1px;
+  background: #2a2e39;
+  margin: 4px 0;
+}
+
+.fib-extra-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fib-option-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: #d1d4dc;
+}
+
+.fib-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.tv-range-slider {
+  accent-color: #2962ff;
+  cursor: pointer;
+  flex: 1;
+}
+
+.tv-slider-val {
+  font-size: 11px;
+  font-weight: 600;
+  color: #787b86;
+  width: 36px;
+}
+
+.tv-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 20px;
+  border-top: 1px solid #2a2e39;
+  background: #171b26;
+}
+
+.tv-btn {
+  padding: 6px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s ease;
+}
+
+.tv-btn:hover {
+  opacity: 0.9;
+}
+
+.tv-btn-cancel {
+  background: #2a2e39;
+  color: #b2b5be;
+}
+
+.tv-btn-ok {
+  background: #2962ff;
+  color: #ffffff;
+}
+
 .tv-flyout-item:hover {
   background: #2a2e39;
   color: #ffffff;
