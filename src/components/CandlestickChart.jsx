@@ -134,14 +134,17 @@ export default function CandlestickChart({
     // Subscribe to chart click event for picking replay candle
     chart.subscribeClick((param) => {
       if (!isPickingRef.current) return;
-      if (!param.time) return;
+      if (param.time == null) return;
 
-      const timeStr = typeof param.time === 'string'
-        ? param.time
-        : `${param.time.year}-${String(param.time.month).padStart(2, '0')}-${String(param.time.day).padStart(2, '0')}`;
+      let timeVal;
+      if (typeof param.time === 'number' || typeof param.time === 'string') {
+        timeVal = param.time;
+      } else if (typeof param.time === 'object' && param.time !== null) {
+        timeVal = `${param.time.year}-${String(param.time.month).padStart(2, '0')}-${String(param.time.day).padStart(2, '0')}`;
+      }
 
-      if (onSelectCandleTimeRef.current) {
-        onSelectCandleTimeRef.current(timeStr);
+      if (timeVal != null && onSelectCandleTimeRef.current) {
+        onSelectCandleTimeRef.current(timeVal);
       }
     });
 
