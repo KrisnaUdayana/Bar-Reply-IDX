@@ -4,6 +4,7 @@ import FibSettingsModal, { DEFAULT_FIB_LEVELS } from './FibSettingsModal';
 /**
  * 1:1 TradingView Position, Lines, & Fibonacci Overlay Component.
  * Supports: Long/Short position, Ruler, Trendline, Ray, Horizontal Line, Vertical Line, Horizontal Ray, Crossline, Fib Retracement, & Fib Settings Modal.
+ * Supports dragging entire Fibonacci drawings & individual handles.
  *
  * @param {{
  *   chartRef: React.RefObject,
@@ -263,7 +264,7 @@ export default function DrawingOverlay({
     }
   };
 
-  // Global window drag handler for smooth handle dragging
+  // Global window drag handler for smooth handle dragging & entire object moving
   const startDragging = (e, drawing, handleType) => {
     e.preventDefault();
     e.stopPropagation();
@@ -272,8 +273,10 @@ export default function DrawingOverlay({
     const rect = containerRef.current.getBoundingClientRect();
     const initialDrawing = { ...drawing };
 
+    const startMouseY = e.clientY - rect.top;
     const startMouseX = e.clientX - rect.left;
     const startMouseLogical = xToLogical(startMouseX) ?? 0;
+    const startMousePrice = yToPrice(startMouseY);
 
     const handleWindowMouseMove = (moveEvent) => {
       moveEvent.preventDefault();
@@ -327,6 +330,26 @@ export default function DrawingOverlay({
           price2: currentPrice,
           endLogical: currentLogical ?? initialDrawing.endLogical,
         });
+      } else if (handleType === 'move') {
+        // Drag entire Fibonacci or Line drawing across price & time
+        if (startMousePrice != null && currentPrice != null) {
+          const deltaPrice = currentPrice - startMousePrice;
+          const updates = {
+            price1: initialDrawing.price1 + deltaPrice,
+            price2: initialDrawing.price2 + deltaPrice,
+          };
+
+          if (initialDrawing.startLogical != null && initialDrawing.endLogical != null) {
+            const currentLogical = xToLogical(currentMouseX);
+            if (currentLogical != null && startMouseLogical != null) {
+              const deltaLogical = currentLogical - startMouseLogical;
+              updates.startLogical = initialDrawing.startLogical + deltaLogical;
+              updates.endLogical = initialDrawing.endLogical + deltaLogical;
+            }
+          }
+
+          onUpdateDrawing(drawing.id, updates);
+        }
       }
     };
 
@@ -384,10 +407,20 @@ export default function DrawingOverlay({
 
             return (
               <g key={drawing.id} className="fib-group">
-                {/* Diagonal trend connecting line */}
-                <line x1={x1} y1={priceToY(p1)} x2={x2} y2={priceToY(p2)} stroke="rgba(255,255,255,0.4)" strokeWidth="1" strokeDasharray="3 3" />
+                {/* Diagonal trend connecting line (draggable to move entire Fib object) */}
+                <line
+                  x1={x1}
+                  y1={priceToY(p1)}
+                  x2={x2}
+                  y2={priceToY(p2)}
+                  stroke="rgba(255,255,255,0.7)"
+                  strokeWidth="2"
+                  strokeDasharray="4 3"
+                  style={{ cursor: 'grab', pointerEvents: 'auto' }}
+                  onMouseDown={(e) => startDragging(e, drawing, 'move')}
+                />
 
-                {/* Shaded ratio background bands */}
+                {/* Shaded ratio background bands (draggable to move entire Fib object) */}
                 {settings.showBackground && computedLevels.map((lvl, i) => {
                   if (i === 0 || lvl.y == null) return null;
                   const prevLvl = computedLevels[i - 1];
@@ -405,6 +438,8 @@ export default function DrawingOverlay({
                       height={Math.max(1, bandHeight)}
                       fill={lvl.color}
                       fillOpacity={settings.bgOpacity ?? 0.15}
+                      style={{ cursor: 'grab', pointerEvents: 'auto' }}
+                      onMouseDown={(e) => startDragging(e, drawing, 'move')}
                     />
                   );
                 })}
@@ -492,7 +527,17 @@ export default function DrawingOverlay({
 
             return (
               <g key={drawing.id} className="fib-group">
-                <line x1={x1} y1={priceToY(p1)} x2={x2} y2={priceToY(p2)} stroke="rgba(255,255,255,0.4)" strokeWidth="1" strokeDasharray="3 3" />
+                <line
+                  x1={x1}
+                  y1={priceToY(p1)}
+                  x2={x2}
+                  y2={priceToY(p2)}
+                  stroke="rgba(255,255,255,0.7)"
+                  strokeWidth="2"
+                  strokeDasharray="4 3"
+                  style={{ cursor: 'grab', pointerEvents: 'auto' }}
+                  onMouseDown={(e) => startDragging(e, drawing, 'move')}
+                />
 
                 {computedLevels.map((lvl, i) => {
                   if (lvl.y == null) return null;
@@ -665,7 +710,16 @@ export default function DrawingOverlay({
 
             return (
               <g key={drawing.id} className="line-group">
-                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#2962ff" strokeWidth="2" />
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke="#2962ff"
+                  strokeWidth="2"
+                  style={{ cursor: 'grab', pointerEvents: 'auto' }}
+                  onMouseDown={(e) => startDragging(e, drawing, 'move')}
+                />
 
                 {/* Point 1 Handle */}
                 <g style={{ cursor: 'pointer', pointerEvents: 'auto' }} onMouseDown={(e) => startDragging(e, drawing, 'p1')}>
