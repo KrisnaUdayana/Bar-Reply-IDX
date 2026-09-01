@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 
 /**
- * Full TradingView-identical Left Drawing Toolbar with Flyout Popups & All Icons.
+ * Full TradingView-identical Left Drawing Toolbar with Flyout Popups (FORECASTING & LINES).
  *
  * @param {{
  *   activeTool: string,
@@ -16,7 +16,7 @@ export default function DrawingToolbar({
   onClearDrawings,
   drawingsCount = 0,
 }) {
-  const [activeFlyout, setActiveFlyout] = useState(null); // 'forecasting' | null
+  const [activeFlyout, setActiveFlyout] = useState(null); // 'lines' | 'forecasting' | null
   const [isMagnetActive, setIsMagnetActive] = useState(false);
   const [isDrawingsHidden, setIsDrawingsHidden] = useState(false);
   const toolbarRef = useRef(null);
@@ -44,6 +44,12 @@ export default function DrawingToolbar({
     setActiveFlyout(prev => (prev === menuName ? null : menuName));
   };
 
+  const lineTools = [
+    'trendline', 'ray', 'infoline', 'extendedline', 'trendangle',
+    'horizontalline', 'horizontalray', 'verticalline', 'crossline'
+  ];
+
+  const isLineActive = lineTools.includes(activeTool);
   const isForecastingActive = activeTool === 'long' || activeTool === 'short';
 
   return (
@@ -62,18 +68,138 @@ export default function DrawingToolbar({
           </svg>
         </button>
 
-        {/* 2. Trendlines (Garis Tren) */}
-        <button
-          className="tv-tool-btn"
-          onClick={() => handleToolClick('cursor')}
-          title="Trend Line Tools"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <circle cx="5" cy="19" r="2" fill="currentColor" />
-            <circle cx="19" cy="5" r="2" fill="currentColor" />
-            <line x1="7" y1="17" x2="17" y2="7" />
-          </svg>
-        </button>
+        {/* 2. LINES Tools (Trendline, Horizontal line, Vertical line, etc.) */}
+        <div className="tv-flyout-container">
+          <button
+            className={`tv-tool-btn ${isLineActive || activeFlyout === 'lines' ? 'active' : ''}`}
+            onClick={() => toggleFlyout('lines')}
+            title="Line Drawing Tools (Trendline, Horizontal line, etc.)"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="5" cy="19" r="2" fill="currentColor" />
+              <circle cx="19" cy="5" r="2" fill="currentColor" />
+              <line x1="7" y1="17" x2="17" y2="7" />
+            </svg>
+            <span className="tv-flyout-arrow">‹</span>
+          </button>
+
+          {/* LINES Flyout Menu */}
+          {activeFlyout === 'lines' && (
+            <div className="tv-flyout-menu">
+              <div className="tv-flyout-header">LINES</div>
+
+              <button
+                className={`tv-flyout-item ${activeTool === 'trendline' ? 'selected' : ''}`}
+                onClick={() => handleToolClick('trendline')}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="tv-item-icon">
+                  <circle cx="5" cy="19" r="2" fill="currentColor" />
+                  <circle cx="19" cy="5" r="2" fill="currentColor" />
+                  <line x1="7" y1="17" x2="17" y2="7" />
+                </svg>
+                <span>Trendline</span>
+                <span className="tv-hotkey">Alt + T</span>
+              </button>
+
+              <button
+                className={`tv-flyout-item ${activeTool === 'ray' ? 'selected' : ''}`}
+                onClick={() => handleToolClick('ray')}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="tv-item-icon">
+                  <circle cx="5" cy="19" r="2" fill="currentColor" />
+                  <line x1="7" y1="17" x2="21" y2="3" />
+                </svg>
+                <span>Ray</span>
+              </button>
+
+              <button
+                className={`tv-flyout-item ${activeTool === 'infoline' ? 'selected' : ''}`}
+                onClick={() => handleToolClick('infoline')}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="tv-item-icon">
+                  <circle cx="5" cy="19" r="2" fill="currentColor" />
+                  <circle cx="17" cy="7" r="2" fill="currentColor" />
+                  <line x1="7" y1="17" x2="15" y2="9" />
+                  <rect x="15" y="15" width="6" height="5" rx="1" fill="none" stroke="currentColor" />
+                </svg>
+                <span>Info line</span>
+              </button>
+
+              <button
+                className={`tv-flyout-item ${activeTool === 'extendedline' ? 'selected' : ''}`}
+                onClick={() => handleToolClick('extendedline')}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="tv-item-icon">
+                  <line x1="2" y1="22" x2="22" y2="2" />
+                  <circle cx="8" cy="16" r="2" fill="currentColor" />
+                  <circle cx="16" cy="8" r="2" fill="currentColor" />
+                </svg>
+                <span>Extended line</span>
+              </button>
+
+              <button
+                className={`tv-flyout-item ${activeTool === 'trendangle' ? 'selected' : ''}`}
+                onClick={() => handleToolClick('trendangle')}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="tv-item-icon">
+                  <line x1="4" y1="20" x2="20" y2="20" />
+                  <line x1="4" y1="20" x2="18" y2="6" />
+                  <path d="M12 20a8 8 0 0 0-4-7" />
+                </svg>
+                <span>Trend angle</span>
+              </button>
+
+              <button
+                className={`tv-flyout-item ${activeTool === 'horizontalline' ? 'selected' : ''}`}
+                onClick={() => handleToolClick('horizontalline')}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="tv-item-icon">
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                  <circle cx="12" cy="12" r="2" fill="currentColor" />
+                </svg>
+                <span>Horizontal line</span>
+                <span className="tv-hotkey">Alt + H</span>
+              </button>
+
+              <button
+                className={`tv-flyout-item ${activeTool === 'horizontalray' ? 'selected' : ''}`}
+                onClick={() => handleToolClick('horizontalray')}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="tv-item-icon">
+                  <circle cx="6" cy="12" r="2" fill="currentColor" />
+                  <line x1="8" y1="12" x2="22" y2="12" />
+                </svg>
+                <span>Horizontal ray</span>
+                <span className="tv-hotkey">Alt + J</span>
+              </button>
+
+              <button
+                className={`tv-flyout-item ${activeTool === 'verticalline' ? 'selected' : ''}`}
+                onClick={() => handleToolClick('verticalline')}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="tv-item-icon">
+                  <line x1="12" y1="2" x2="12" y2="22" />
+                  <circle cx="12" cy="12" r="2" fill="currentColor" />
+                </svg>
+                <span>Vertical line</span>
+                <span className="tv-hotkey">Alt + V</span>
+              </button>
+
+              <button
+                className={`tv-flyout-item ${activeTool === 'crossline' ? 'selected' : ''}`}
+                onClick={() => handleToolClick('crossline')}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="tv-item-icon">
+                  <line x1="12" y1="2" x2="12" y2="22" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                  <circle cx="12" cy="12" r="2" fill="currentColor" />
+                </svg>
+                <span>Crossline</span>
+                <span className="tv-hotkey">Alt + C</span>
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* 3. Gann & Fibonacci */}
         <button
@@ -109,7 +235,6 @@ export default function DrawingToolbar({
             onClick={() => toggleFlyout('forecasting')}
             title="Prediction & Measurement (Long/Short Position)"
           >
-            {/* TradingView Forecasting Icon */}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
               <line x1="3" y1="8" x2="21" y2="8" />
               <line x1="3" y1="16" x2="21" y2="16" />
