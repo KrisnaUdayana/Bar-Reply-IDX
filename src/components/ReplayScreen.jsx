@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { STOCKS } from '../config/stocks';
 import { loadStockData } from '../utils/dataLoader';
-import { aggregateToWeekly } from '../utils/timeframeUtils';
+import { aggregateToWeekly, aggregateToMonthly } from '../utils/timeframeUtils';
 import { useReplayEngine } from '../hooks/useReplayEngine';
 import CandlestickChart from './CandlestickChart';
 import ReplayControls from './ReplayControls';
@@ -18,11 +18,14 @@ export default function ReplayScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Transform data based on active timeframe (1D or 1W)
+  // Transform data based on active timeframe (1D, 1W, 1M)
   const activeData = useMemo(() => {
     if (!stockData) return null;
     if (timeframe === '1W') {
       return aggregateToWeekly(stockData);
+    }
+    if (timeframe === '1M') {
+      return aggregateToMonthly(stockData);
     }
     return stockData;
   }, [stockData, timeframe]);
@@ -118,6 +121,13 @@ export default function ReplayScreen() {
               title="Timeframe Mingguan (Weekly)"
             >
               1W
+            </button>
+            <button
+              className={`timeframe-btn ${timeframe === '1M' ? 'active' : ''}`}
+              onClick={() => setTimeframe('1M')}
+              title="Timeframe Bulanan (Monthly)"
+            >
+              1M
             </button>
           </div>
         </div>

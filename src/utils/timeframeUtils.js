@@ -56,3 +56,45 @@ export function aggregateToWeekly(dailyCandles) {
 
   return Array.from(weeklyMap.values());
 }
+
+/**
+ * Aggregate daily candles array into monthly OHLC candles.
+ * Each monthly candle takes:
+ * - time: date of the first trading day of the month
+ * - open: open price of the first day of the month
+ * - high: highest price during the month
+ * - low: lowest price during the month
+ * - close: close price of the last trading day of the month
+ *
+ * @param {Array<{time: string, open: number, high: number, low: number, close: number}>} dailyCandles
+ * @returns {Array<{time: string, open: number, high: number, low: number, close: number}>}
+ */
+export function aggregateToMonthly(dailyCandles) {
+  if (!Array.isArray(dailyCandles) || dailyCandles.length === 0) {
+    return [];
+  }
+
+  const monthlyMap = new Map();
+
+  for (const candle of dailyCandles) {
+    if (!candle || !candle.time) continue;
+    const monthKey = candle.time.substring(0, 7); // "YYYY-MM"
+
+    if (!monthlyMap.has(monthKey)) {
+      monthlyMap.set(monthKey, {
+        time: candle.time, // First trading day date of the month
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close,
+      });
+    } else {
+      const existing = monthlyMap.get(monthKey);
+      existing.high = Math.max(existing.high, candle.high);
+      existing.low = Math.min(existing.low, candle.low);
+      existing.close = candle.close;
+    }
+  }
+
+  return Array.from(monthlyMap.values());
+}
