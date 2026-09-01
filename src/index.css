@@ -806,11 +806,13 @@ body::before {
   stroke-width: 1px;
   cursor: ns-resize;
   pointer-events: auto;
-  transition: transform 0.15s ease;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.12s ease;
 }
 
 .tv-handle-square:hover {
-  transform: scale(1.4);
+  transform: scale(1.3);
 }
 
 .tv-handle-square.handle-width {
