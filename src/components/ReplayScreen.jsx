@@ -129,29 +129,25 @@ export default function ReplayScreen() {
             </select>
           </div>
 
-          <div className="timeframe-selector">
-            <button className={`timeframe-btn ${timeframe === "1H" ? "active" : ""}`} onClick={() => setTimeframe("1H")} title="Timeframe 1 Jam">
-              1H
-            </button>
-            <button className={`timeframe-btn ${timeframe === "2H" ? "active" : ""}`} onClick={() => setTimeframe("2H")} title="Timeframe 2 Jam">
-              2H
-            </button>
-            <button className={`timeframe-btn ${timeframe === "3H" ? "active" : ""}`} onClick={() => setTimeframe("3H")} title="Timeframe 3 Jam">
-              3H
-            </button>
-            <button className={`timeframe-btn ${timeframe === "4H" ? "active" : ""}`} onClick={() => setTimeframe("4H")} title="Timeframe 4 Jam">
-              4H
-            </button>
-            <div className="timeframe-divider" />
-            <button className={`timeframe-btn ${timeframe === "1D" ? "active" : ""}`} onClick={() => setTimeframe("1D")} title="Timeframe Harian (Daily)">
-              1D
-            </button>
-            <button className={`timeframe-btn ${timeframe === "1W" ? "active" : ""}`} onClick={() => setTimeframe("1W")} title="Timeframe Mingguan (Weekly)">
-              1W
-            </button>
-            <button className={`timeframe-btn ${timeframe === "1M" ? "active" : ""}`} onClick={() => setTimeframe("1M")} title="Timeframe Bulanan (Monthly)">
-              1M
-            </button>
+          <div className="timeframe-selector-wrapper">
+            <select
+              className="timeframe-select"
+              value={timeframe}
+              onChange={(e) => setTimeframe(e.target.value)}
+              title="Pilih Timeframe Chart"
+            >
+              <optgroup label="Intraday (Jam)">
+                <option value="1H">1H — 1 Jam</option>
+                <option value="2H">2H — 2 Jam</option>
+                <option value="3H">3H — 3 Jam</option>
+                <option value="4H">4H — 4 Jam</option>
+              </optgroup>
+              <optgroup label="Harian / Periodic">
+                <option value="1D">1D — Daily (Harian)</option>
+                <option value="1W">1W — Weekly (Mingguan)</option>
+                <option value="1M">1M — Monthly (Bulanan)</option>
+              </optgroup>
+            </select>
           </div>
         </div>
 
