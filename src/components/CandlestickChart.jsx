@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { createChart, ColorType } from "lightweight-charts";
 import DrawingOverlay from "./DrawingOverlay";
+import { tickMarkFormatter, chartLocalization } from "../utils/chartFormatters";
 
 /**
  * Candlestick chart component using TradingView's lightweight-charts.
@@ -18,6 +19,8 @@ export default function CandlestickChart({
   onUpdateDrawing,
   onRemoveDrawing,
   onToolUsed,
+  onChartReady,
+  showTimeAxis = true,
 }) {
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
@@ -45,26 +48,7 @@ export default function CandlestickChart({
         fontFamily: "'Inter', sans-serif",
         fontSize: 12,
       },
-      localization: {
-        locale: "id-ID",
-        timeFormatter: (time) => {
-          if (typeof time === "number") {
-            const d = new Date(time * 1000);
-            return d
-              .toLocaleString("id-ID", {
-                timeZone: "Asia/Jakarta",
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: false,
-              })
-              .replace(".", ":");
-          }
-          return String(time);
-        },
-      },
+      localization: chartLocalization,
       grid: {
         vertLines: { color: "rgba(255, 255, 255, 0.04)" },
         horzLines: { color: "rgba(255, 255, 255, 0.04)" },
@@ -88,34 +72,14 @@ export default function CandlestickChart({
         },
       },
       timeScale: {
+        visible: showTimeAxis,
         borderColor: "rgba(255, 255, 255, 0.08)",
         timeVisible: false,
         secondsVisible: false,
         rightOffset: 5,
         barSpacing: 12,
         minBarSpacing: 4,
-        tickMarkFormatter: (time, tickMarkType) => {
-          if (typeof time === "number") {
-            const date = new Date(time * 1000);
-            // tickMarkType: 0 = Year, 1 = Month, 2 = DayOfMonth, 3 = Time, 4 = TimeWithSeconds
-            if (tickMarkType <= 2) {
-              return date.toLocaleDateString("id-ID", {
-                timeZone: "Asia/Jakarta",
-                day: "numeric",
-                month: "short",
-              });
-            }
-            return date
-              .toLocaleTimeString("id-ID", {
-                timeZone: "Asia/Jakarta",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: false,
-              })
-              .replace(".", ":");
-          }
-          return null;
-        },
+        tickMarkFormatter,
       },
       handleScroll: {
         mouseWheel: true,
@@ -155,6 +119,10 @@ export default function CandlestickChart({
     chartRef.current = chart;
     seriesRef.current = candleSeries;
 
+    if (onChartReady) {
+      onChartReady(chart, candleSeries);
+    }
+
     // Handle resize
     const resizeObserver = new ResizeObserver((entries) => {
       if (entries.length === 0 || !chartContainerRef.current) return;
@@ -164,11 +132,56 @@ export default function CandlestickChart({
 
     resizeObserver.observe(chartContainerRef.current);
 
+    // Scrolling over the price scale (right axis) should zoom the price
+    // scale vertically (stretch/compress candles), not the time scale
+    // horizontally. We intercept the wheel event in the capture phase so we
+    // can stop it before the library's own wheel handler (which otherwise
+    // always zooms the time scale) sees it.
+    const handlePriceScaleWheel = (event) => {
+      const container = chartContainerRef.current;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const priceScaleWidth = chart.priceScale("right").width();
+      const boundaryX = rect.width - priceScaleWidth;
+      const cursorX = event.clientX - rect.left;
+
+      if (cursorX < boundaryX) return; // over the chart body, keep default behavior
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      const priceScale = chart.priceScale("right");
+      const currentMargins = priceScale.options().scaleMargins || { top: 0.1, bottom: 0.1 };
+      const zoomIntensity = 0.0006;
+      const delta = event.deltaY * zoomIntensity;
+
+      const clamp = (v) => Math.min(0.45, Math.max(0.02, v));
+
+      priceScale.applyOptions({
+        scaleMargins: {
+          top: clamp(currentMargins.top + delta),
+          bottom: clamp(currentMargins.bottom + delta),
+        },
+      });
+    };
+
+    chartContainerRef.current.addEventListener("wheel", handlePriceScaleWheel, {
+      capture: true,
+      passive: false,
+    });
+
     return () => {
       resizeObserver.disconnect();
+      chartContainerRef.current?.removeEventListener("wheel", handlePriceScaleWheel, {
+        capture: true,
+      });
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
+      if (onChartReady) {
+        onChartReady(null, null);
+      }
     };
   }, []);
 
@@ -183,6 +196,15 @@ export default function CandlestickChart({
       },
     });
   }, [timeframe]);
+
+  // Hide this chart's own date axis whenever an indicator pane is stacked
+  // below it, so the date labels only appear once, at the bottom-most pane
+  useEffect(() => {
+    if (!chartRef.current) return;
+    chartRef.current.applyOptions({
+      timeScale: { visible: showTimeAxis },
+    });
+  }, [showTimeAxis]);
 
   // Update data when visible candles change
   useEffect(() => {

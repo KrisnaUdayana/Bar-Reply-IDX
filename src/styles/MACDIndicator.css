@@ -1,0 +1,102 @@
+/* MACD Indicator Styling */
+
+.macd-container {
+  display: flex;
+  flex-direction: column;
+  background: rgba(12, 12, 20, 0.8);
+  height: 100%;
+  padding: 12px 0;
+  font-family: var(--font-family);
+}
+
+.macd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.macd-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: 0.05em;
+}
+
+.macd-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.macd-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.macd-legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.macd-line {
+  background: #6366f1;
+  height: 2px;
+  width: 14px;
+  border-radius: 1px;
+}
+
+.signal-line {
+  background: #f59e0b;
+  height: 2px;
+  width: 14px;
+  border-radius: 1px;
+}
+
+.histogram-bar {
+  background: linear-gradient(
+    to bottom,
+    rgba(16, 185, 129, 0.4) 0%,
+    rgba(244, 63, 94, 0.4) 100%
+  );
+  width: 8px;
+}
+
+.macd-chart-container {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.macd-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .macd-header {
+    padding: 0 12px 8px;
+  }
+
+  .macd-legend {
+    gap: 12px;
+  }
+
+  .macd-legend-item {
+    font-size: 0.7rem;
+  }
+}
