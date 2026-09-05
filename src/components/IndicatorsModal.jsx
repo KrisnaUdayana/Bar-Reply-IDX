@@ -83,7 +83,12 @@ const INDICATORS_BY_CATEGORY = {
   ],
 };
 
-export default function IndicatorsModal({ isOpen, onClose }) {
+export default function IndicatorsModal({
+  isOpen,
+  onClose,
+  onSelectIndicator,
+  activeIndicators = [],
+}) {
   const [selectedCategory, setSelectedCategory] = useState("Popular");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -156,10 +161,20 @@ export default function IndicatorsModal({ isOpen, onClose }) {
             filteredIndicators.map((indicator, index) => (
               <button
                 key={index}
-                className="indicators-item"
-                title={`Add ${indicator} indicator`}
+                className={`indicators-item ${
+                  activeIndicators.includes(indicator) ? "active" : ""
+                }`}
+                onClick={() => onSelectIndicator?.(indicator)}
+                title={
+                  activeIndicators.includes(indicator)
+                    ? `Remove ${indicator}`
+                    : `Add ${indicator}`
+                }
               >
                 {indicator}
+                {activeIndicators.includes(indicator) && (
+                  <span className="indicator-checkmark">✓</span>
+                )}
               </button>
             ))
           ) : (

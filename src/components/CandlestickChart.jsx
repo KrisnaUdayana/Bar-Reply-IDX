@@ -18,6 +18,7 @@ export default function CandlestickChart({
   onUpdateDrawing,
   onRemoveDrawing,
   onToolUsed,
+  onChartReady,
 }) {
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
@@ -155,6 +156,10 @@ export default function CandlestickChart({
     chartRef.current = chart;
     seriesRef.current = candleSeries;
 
+    if (onChartReady) {
+      onChartReady(chart);
+    }
+
     // Handle resize
     const resizeObserver = new ResizeObserver((entries) => {
       if (entries.length === 0 || !chartContainerRef.current) return;
@@ -169,6 +174,9 @@ export default function CandlestickChart({
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
+      if (onChartReady) {
+        onChartReady(null);
+      }
     };
   }, []);
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { STOCKS } from "../config/stocks";
 import { loadStockData } from "../utils/dataLoader";
 import { aggregateToWeekly, aggregateToMonthly, aggregateToNHours } from "../utils/timeframeUtils";
@@ -8,6 +8,7 @@ import ReplayControls from "./ReplayControls";
 import ReplayFinished from "./ReplayFinished";
 import DrawingToolbar from "./DrawingToolbar";
 import IndicatorsModal from "./IndicatorsModal";
+import MACDIndicator from "./MACDIndicator";
 
 /**
  * Main trading view workspace component.
@@ -20,6 +21,10 @@ export default function ReplayScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showIndicators, setShowIndicators] = useState(false);
+  const [activeIndicators, setActiveIndicators] = useState([]); // Array of active indicator names
+  const [macdHeight, setMacdHeight] = useState(220);
+  const mainChartRef = useRef(null);
+  const resizeStateRef = useRef(null);
 
   // Drawing Toolbar State
   const [activeTool, setActiveTool] = useState("cursor");
@@ -39,6 +44,46 @@ export default function ReplayScreen() {
 
   const handleClearDrawings = useCallback(() => {
     setDrawings([]);
+  }, []);
+
+  const handleResizeStart = useCallback((e) => {
+    resizeStateRef.current = {
+      startY: e.clientY,
+      startHeight: macdHeight,
+    };
+
+    const handleMouseMove = (moveEvent) => {
+      if (!resizeStateRef.current) return;
+      const delta = resizeStateRef.current.startY - moveEvent.clientY;
+      const newHeight = Math.min(
+        600,
+        Math.max(100, resizeStateRef.current.startHeight + delta)
+      );
+      setMacdHeight(newHeight);
+    };
+
+    const handleMouseUp = () => {
+      resizeStateRef.current = null;
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+  }, [macdHeight]);
+
+  const handleAddIndicator = useCallback((indicatorName) => {
+    setActiveIndicators((prev) => {
+      if (prev.includes(indicatorName)) {
+        return prev.filter((name) => name !== indicatorName);
+      }
+      return [...prev, indicatorName];
+    });
+    setShowIndicators(false);
   }, []);
 
   const isHourlyTimeframe = ["1H", "2H", "3H", "4H"].includes(timeframe);
@@ -200,19 +245,38 @@ export default function ReplayScreen() {
         ) : error ? (
           <div className="workspace-error">{error}</div>
         ) : (
-          <CandlestickChart
-            data={visibleCandles}
-            ticker={selectedTicker}
-            timeframe={timeframe}
-            isPicking={mode === "picking"}
-            onSelectCandleTime={selectCutoffByTime}
-            activeTool={activeTool}
-            drawings={drawings}
-            onAddDrawing={handleAddDrawing}
-            onUpdateDrawing={handleUpdateDrawing}
-            onRemoveDrawing={handleRemoveDrawing}
-            onToolUsed={() => setActiveTool("cursor")}
-          />
+          <div className="chart-with-indicators">
+            <div className="main-chart-pane">
+              <CandlestickChart
+                data={visibleCandles}
+                ticker={selectedTicker}
+                timeframe={timeframe}
+                isPicking={mode === "picking"}
+                onSelectCandleTime={selectCutoffByTime}
+                activeTool={activeTool}
+                drawings={drawings}
+                onAddDrawing={handleAddDrawing}
+                onUpdateDrawing={handleUpdateDrawing}
+                onRemoveDrawing={handleRemoveDrawing}
+                onToolUsed={() => setActiveTool("cursor")}
+                onChartReady={(chart) => {
+                  mainChartRef.current = chart;
+                }}
+              />
+            </div>
+            {activeIndicators.includes("MACD") && (
+              <>
+                <div
+                  className="pane-resize-handle"
+                  onMouseDown={handleResizeStart}
+                  title="Drag untuk mengubah ukuran panel MACD"
+                />
+                <div className="indicator-pane" style={{ height: macdHeight }}>
+                  <MACDIndicator data={visibleCandles} mainChartRef={mainChartRef} />
+                </div>
+              </>
+            )}
+          </div>
         )}
       </main>
 
@@ -238,7 +302,12 @@ export default function ReplayScreen() {
       {showFinishedModal && <ReplayFinished ticker={selectedTicker} currentCandle={currentCandle} onReplayAgain={resetToCutoff} onStayOnChart={dismissFinishedModal} onExitReplay={exitReplay} />}
 
       {/* Indicators Modal */}
-      <IndicatorsModal isOpen={showIndicators} onClose={() => setShowIndicators(false)} />
+      <IndicatorsModal
+        isOpen={showIndicators}
+        onClose={() => setShowIndicators(false)}
+        onSelectIndicator={handleAddIndicator}
+        activeIndicators={activeIndicators}
+      />
     </div>
   );
 }

@@ -218,6 +218,10 @@
   transition: all var(--transition-fast);
   outline: none;
   word-break: break-word;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .indicators-item:hover {
@@ -230,6 +234,26 @@
 
 .indicators-item:active {
   transform: translateY(0);
+}
+
+.indicators-item.active {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: #6366f1;
+  color: #6366f1;
+}
+
+.indicators-item.active:hover {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: #6366f1;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.indicator-checkmark {
+  position: absolute;
+  right: 4px;
+  top: 2px;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
 /* Empty State */
