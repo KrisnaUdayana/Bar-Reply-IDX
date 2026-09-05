@@ -1,6 +1,7 @@
 import { useEffect, useRef, useMemo } from "react";
 import { createChart, ColorType } from "lightweight-charts";
 import { calculateMACD } from "../utils/indicatorCalculations";
+import { tickMarkFormatter, chartLocalization } from "../utils/chartFormatters";
 import "../styles/MACDIndicator.css";
 
 /**
@@ -8,17 +9,34 @@ import "../styles/MACDIndicator.css";
  * scale can be synced bidirectionally with the main candlestick chart
  * (scroll/zoom on either pane moves both).
  */
-export default function MACDIndicator({ data, mainChartRef }) {
+export default function MACDIndicator({ data, mainChartRef, mainSeriesRef, timeframe = "1D" }) {
   const containerRef = useRef(null);
   const chartRef = useRef(null);
   const macdSeriesRef = useRef(null);
   const signalSeriesRef = useRef(null);
   const histogramSeriesRef = useRef(null);
   const isSyncingRef = useRef(false);
+  const isSyncingCrosshairRef = useRef(false);
 
-  const macdData = useMemo(() => {
-    if (!data || data.length === 0) return [];
-    return calculateMACD(data);
+  const { macdData, macdValueByTime, closeByTime } = useMemo(() => {
+    if (!data || data.length === 0) {
+      return { macdData: [], macdValueByTime: new Map(), closeByTime: new Map() };
+    }
+
+    const calculated = calculateMACD(data);
+    const valueByTime = new Map();
+    const closeMap = new Map();
+
+    calculated.forEach((d, i) => {
+      if (d.macd !== undefined && !isNaN(d.macd)) {
+        valueByTime.set(d.time, d.macd);
+      }
+      if (data[i]) {
+        closeMap.set(d.time, data[i].close);
+      }
+    });
+
+    return { macdData: calculated, macdValueByTime: valueByTime, closeByTime: closeMap };
   }, [data]);
 
   // Initialize the MACD chart once
@@ -32,6 +50,7 @@ export default function MACDIndicator({ data, mainChartRef }) {
         fontFamily: "'Inter', sans-serif",
         fontSize: 11,
       },
+      localization: chartLocalization,
       grid: {
         vertLines: { color: "rgba(255, 255, 255, 0.04)" },
         horzLines: { color: "rgba(255, 255, 255, 0.04)" },
@@ -45,6 +64,7 @@ export default function MACDIndicator({ data, mainChartRef }) {
         borderColor: "rgba(255, 255, 255, 0.08)",
         visible: true,
         timeVisible: false,
+        tickMarkFormatter,
       },
       handleScroll: {
         mouseWheel: true,
@@ -87,8 +107,47 @@ export default function MACDIndicator({ data, mainChartRef }) {
     });
     resizeObserver.observe(containerRef.current);
 
+    // Same fix as the main chart: scrolling over the price scale (right
+    // axis) should zoom that scale vertically instead of the time scale.
+    const handlePriceScaleWheel = (event) => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const priceScaleWidth = chart.priceScale("right").width();
+      const boundaryX = rect.width - priceScaleWidth;
+      const cursorX = event.clientX - rect.left;
+
+      if (cursorX < boundaryX) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      const priceScale = chart.priceScale("right");
+      const currentMargins = priceScale.options().scaleMargins || { top: 0.2, bottom: 0.2 };
+      const zoomIntensity = 0.0006;
+      const delta = event.deltaY * zoomIntensity;
+
+      const clamp = (v) => Math.min(0.45, Math.max(0.02, v));
+
+      priceScale.applyOptions({
+        scaleMargins: {
+          top: clamp(currentMargins.top + delta),
+          bottom: clamp(currentMargins.bottom + delta),
+        },
+      });
+    };
+
+    containerRef.current.addEventListener("wheel", handlePriceScaleWheel, {
+      capture: true,
+      passive: false,
+    });
+
     return () => {
       resizeObserver.disconnect();
+      containerRef.current?.removeEventListener("wheel", handlePriceScaleWheel, {
+        capture: true,
+      });
       chart.remove();
       chartRef.current = null;
       macdSeriesRef.current = null;
@@ -128,14 +187,32 @@ export default function MACDIndicator({ data, mainChartRef }) {
     histogramSeriesRef.current.setData(histogram);
   }, [macdData]);
 
-  // Bidirectional sync of the visible range with the main chart
+  // Keep this pane's own time axis (it's the one showing dates whenever the
+  // MACD panel is active) in sync with the selected timeframe, same as the
+  // main chart does.
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const isHourly = ["1H", "2H", "3H", "4H"].includes(timeframe);
+    chartRef.current.applyOptions({
+      timeScale: {
+        timeVisible: isHourly,
+        secondsVisible: false,
+      },
+    });
+  }, [timeframe]);
+
+  // Bidirectional sync of the visible range AND the crosshair with the main
+  // chart, so the vertical crosshair line reads as one continuous line
+  // running through both panes instead of two disconnected ones.
   useEffect(() => {
     const macdChart = chartRef.current;
-    if (!macdChart) return;
+    const macdLineSeries = macdSeriesRef.current;
+    if (!macdChart || !macdLineSeries) return;
 
     const trySync = () => {
       const mainChart = mainChartRef?.current;
-      if (!mainChart) return null;
+      const mainSeries = mainSeriesRef?.current;
+      if (!mainChart || !mainSeries) return null;
 
       const syncFromMain = (range) => {
         if (isSyncingRef.current || !range) return;
@@ -151,8 +228,36 @@ export default function MACDIndicator({ data, mainChartRef }) {
         isSyncingRef.current = false;
       };
 
+      const syncCrosshairFromMain = (param) => {
+        if (isSyncingCrosshairRef.current) return;
+        isSyncingCrosshairRef.current = true;
+        if (param.time == null) {
+          macdChart.clearCrosshairPosition();
+        } else {
+          const value = macdValueByTime.get(param.time) ?? 0;
+          macdChart.setCrosshairPosition(value, param.time, macdLineSeries);
+        }
+        isSyncingCrosshairRef.current = false;
+      };
+
+      const syncCrosshairFromMacd = (param) => {
+        if (isSyncingCrosshairRef.current) return;
+        isSyncingCrosshairRef.current = true;
+        if (param.time == null) {
+          mainChart.clearCrosshairPosition();
+        } else {
+          const value = closeByTime.get(param.time);
+          if (value !== undefined) {
+            mainChart.setCrosshairPosition(value, param.time, mainSeries);
+          }
+        }
+        isSyncingCrosshairRef.current = false;
+      };
+
       mainChart.timeScale().subscribeVisibleLogicalRangeChange(syncFromMain);
       macdChart.timeScale().subscribeVisibleLogicalRangeChange(syncFromMacd);
+      mainChart.subscribeCrosshairMove(syncCrosshairFromMain);
+      macdChart.subscribeCrosshairMove(syncCrosshairFromMacd);
 
       // Align immediately to whatever the main chart currently shows
       const initialRange = mainChart.timeScale().getVisibleLogicalRange();
@@ -163,6 +268,8 @@ export default function MACDIndicator({ data, mainChartRef }) {
       return () => {
         mainChart.timeScale().unsubscribeVisibleLogicalRangeChange(syncFromMain);
         macdChart.timeScale().unsubscribeVisibleLogicalRangeChange(syncFromMacd);
+        mainChart.unsubscribeCrosshairMove(syncCrosshairFromMain);
+        macdChart.unsubscribeCrosshairMove(syncCrosshairFromMacd);
       };
     };
 
@@ -183,7 +290,7 @@ export default function MACDIndicator({ data, mainChartRef }) {
       if (retryTimer) clearInterval(retryTimer);
       if (cleanup) cleanup();
     };
-  }, [mainChartRef, macdData]);
+  }, [mainChartRef, mainSeriesRef, macdData, macdValueByTime, closeByTime]);
 
   return (
     <div className="macd-container">

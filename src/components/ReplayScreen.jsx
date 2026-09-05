@@ -24,6 +24,7 @@ export default function ReplayScreen() {
   const [activeIndicators, setActiveIndicators] = useState([]); // Array of active indicator names
   const [macdHeight, setMacdHeight] = useState(220);
   const mainChartRef = useRef(null);
+  const mainSeriesRef = useRef(null);
   const resizeStateRef = useRef(null);
 
   // Drawing Toolbar State
@@ -259,9 +260,11 @@ export default function ReplayScreen() {
                 onUpdateDrawing={handleUpdateDrawing}
                 onRemoveDrawing={handleRemoveDrawing}
                 onToolUsed={() => setActiveTool("cursor")}
-                onChartReady={(chart) => {
+                onChartReady={(chart, series) => {
                   mainChartRef.current = chart;
+                  mainSeriesRef.current = series;
                 }}
+                showTimeAxis={activeIndicators.length === 0}
               />
             </div>
             {activeIndicators.includes("MACD") && (
@@ -272,7 +275,12 @@ export default function ReplayScreen() {
                   title="Drag untuk mengubah ukuran panel MACD"
                 />
                 <div className="indicator-pane" style={{ height: macdHeight }}>
-                  <MACDIndicator data={visibleCandles} mainChartRef={mainChartRef} />
+                  <MACDIndicator
+                    data={visibleCandles}
+                    mainChartRef={mainChartRef}
+                    mainSeriesRef={mainSeriesRef}
+                    timeframe={timeframe}
+                  />
                 </div>
               </>
             )}
